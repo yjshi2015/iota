@@ -1,6 +1,5 @@
 // Copyright (c) 2024 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
-
 use std::{
     net::SocketAddr,
     path::PathBuf,
@@ -9,6 +8,7 @@ use std::{
 };
 
 use fastcrypto::traits::Signer;
+use iota_cluster_test::faucet::RemoteFaucetClient;
 use iota_config::local_ip_utils::{get_available_port, new_local_tcp_socket_for_testing};
 use iota_indexer::{
     config::{IotaNamesOptions, JsonRpcConfig, SnapshotLagConfig},
@@ -150,6 +150,40 @@ pub async fn start_test_cluster_with_read_write_indexer(
         .unwrap();
 
     (cluster, pg_store, rpc_client)
+}
+
+pub async fn connect_to_rpcs_and_faucet() -> (HttpClient, HttpClient, HttpClient, RemoteFaucetClient)
+{
+    let registry = prometheus::Registry::default();
+    init_metrics(&registry);
+
+    let _testnet_addresses = (
+        "https://api.testnet.iota.cafe",
+        "https://indexer.testnet.iota.cafe",
+        "https://faucet.testnet.iota.cafe",
+    );
+
+    let local_addresses = (
+        "http://localhost:9000",
+        "http://localhost:5003",
+        // "http://localhost:9005",
+        "http://localhost:9004",
+        // "http://localhost:9123",
+        "http://localhost:9007",
+    );
+
+    let addresses = local_addresses;
+    let node_rpc_client = HttpClientBuilder::default().build(addresses.0).unwrap();
+    let faucet = RemoteFaucetClient::new(addresses.1.into());
+    let indexer_rpc_client = HttpClientBuilder::default().build(addresses.2).unwrap();
+    let indexer_rpc_client_wo_optimistic = HttpClientBuilder::default().build(addresses.3).unwrap();
+
+    (
+        node_rpc_client,
+        indexer_rpc_client,
+        indexer_rpc_client_wo_optimistic,
+        faucet,
+    )
 }
 
 /// Wait for the indexer to catch up to the given checkpoint sequence number

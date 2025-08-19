@@ -905,6 +905,38 @@ pub(crate) async fn create_basic_object(
     Ok(basic_obj_id)
 }
 
+pub(crate) async fn create_basic_object_with_gas(
+    address: IotaAddress,
+    address_kp: &AccountKeyPair,
+    client: &HttpClient,
+    package_id: &ObjectID,
+    gas_object: ObjectID,
+    num: u64,
+) -> Result<ObjectID, anyhow::Error> {
+    let res = execute_move_call(
+        client,
+        address,
+        address_kp,
+        *package_id,
+        "object_basics".to_string(),
+        "create".to_string(),
+        type_args![].unwrap(),
+        call_args!(num, address).unwrap(),
+        Some(gas_object),
+    )
+    .await?;
+
+    let basic_obj_id = res
+        .effects
+        .unwrap()
+        .created()
+        .iter()
+        .exactly_one()
+        .unwrap()
+        .object_id();
+    Ok(basic_obj_id)
+}
+
 async fn wrap_basic_object(
     address: IotaAddress,
     address_kp: &AccountKeyPair,
@@ -1008,7 +1040,7 @@ async fn bump_display_object_version(
     .await
 }
 
-async fn create_counter_object(
+pub async fn create_counter_object(
     address: IotaAddress,
     address_kp: &AccountKeyPair,
     client: &HttpClient,
@@ -1039,7 +1071,7 @@ async fn create_counter_object(
     Ok((res, counter_obj_id))
 }
 
-async fn increment_counter(
+pub async fn increment_counter(
     address: IotaAddress,
     address_kp: &AccountKeyPair,
     client: &HttpClient,

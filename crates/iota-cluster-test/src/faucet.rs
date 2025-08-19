@@ -64,7 +64,7 @@ pub struct RemoteFaucetClient {
 }
 
 impl RemoteFaucetClient {
-    fn new(url: String) -> Self {
+    pub fn new(url: String) -> Self {
         info!("Use remote faucet: {}", url);
         Self { remote_url: url }
     }

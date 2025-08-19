@@ -6422,6 +6422,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hex",
+ "iota-cluster-test",
  "iota-config",
  "iota-data-ingestion-core",
  "iota-json",

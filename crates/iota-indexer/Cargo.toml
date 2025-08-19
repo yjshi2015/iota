@@ -73,6 +73,7 @@ iota-config.workspace = true
 iota-keys.workspace = true
 iota-move-build.workspace = true
 iota-swarm-config.workspace = true
+iota-cluster-test.workspace = true
 iota-test-transaction-builder.workspace = true
 simulacrum.workspace = true
 test-cluster.workspace = true

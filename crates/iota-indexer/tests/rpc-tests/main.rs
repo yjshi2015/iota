@@ -23,4 +23,6 @@ mod read_api;
 mod transaction_builder;
 
 #[cfg(feature = "shared_test_runtime")]
+mod custom_tests;
+#[cfg(feature = "shared_test_runtime")]
 mod write_api;
