@@ -1307,7 +1307,7 @@ impl IndexerReader {
         limit: usize,
         is_descending: bool,
     ) -> IndexerResult<Vec<IotaTransactionBlockResponse>> {
-        self.query_transaction_blocks_impl_with_optimistic_indexing(
+        self.query_transaction_blocks_impl_with_checkpointed_data_only(
             filter.map(TransactionFilterKind::V1),
             options,
             cursor,
@@ -1325,7 +1325,7 @@ impl IndexerReader {
         limit: usize,
         is_descending: bool,
     ) -> IndexerResult<Vec<IotaTransactionBlockResponse>> {
-        self.query_transaction_blocks_impl_with_optimistic_indexing(
+        self.query_transaction_blocks_impl_with_checkpointed_data_only(
             filter.map(TransactionFilterKind::V2),
             options,
             cursor,
@@ -2488,7 +2488,7 @@ impl IndexerReader {
     }
 
     #[expect(unused)]
-    async fn query_only_checkpointed_events_in_blocking_task(
+    pub async fn query_only_checkpointed_events_in_blocking_task(
         &self,
         filter: EventFilter,
         cursor: Option<EventID>,
