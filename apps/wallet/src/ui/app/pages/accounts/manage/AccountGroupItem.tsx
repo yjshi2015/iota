@@ -8,7 +8,7 @@ import { formatAddress } from '@iota/iota-sdk/utils';
 import { ExplorerLinkType, NicknameDialog, useUnlockAccount } from '_components';
 import { useNavigate } from 'react-router-dom';
 import { useAccounts, useExplorerLink, useBackgroundClient } from '_hooks';
-import { toast } from '@iota/core';
+import { toast, useGetDefaultIotaName } from '@iota/core';
 import { Account, BadgeType, Dropdown, ListItem } from '@iota/apps-ui-kit';
 import { OutsideClickHandler } from '_components/OutsideClickHandler';
 import { IotaLogoMark, Ledger } from '@iota/apps-ui-icons';
@@ -42,8 +42,8 @@ export function AccountGroupItem({
     const navigate = useNavigate();
     const allAccounts = useAccounts();
     const backgroundClient = useBackgroundClient();
-    const accountName = formatAccountName(account?.nickname, account?.address);
-
+    const { data: iotaName } = useGetDefaultIotaName(account?.address);
+    const accountName = formatAccountName(account?.nickname, iotaName, account?.address);
     const explorerHref = useExplorerLink({
         type: ExplorerLinkType.Address,
         address: account.address,
@@ -71,7 +71,7 @@ export function AccountGroupItem({
         setDialogNicknameOpen(true);
     }
 
-    function handleExportPrivateKey() {
+    function handleExportKeys() {
         navigate(`/accounts/export/${account!.id}`);
     }
 
@@ -159,7 +159,7 @@ export function AccountGroupItem({
                             top: dropdownPosition.y,
                         }}
                         className={clsx(
-                            `absolute right-0 z-[99] rounded-lg bg-neutral-100 shadow-md dark:bg-neutral-6`,
+                            `absolute right-0 z-[99] rounded-lg bg-iota-neutral-100 shadow-md dark:bg-iota-neutral-6`,
                             showDropdownOptionsBottom ? '-translate-y-full' : '',
                         )}
                     >
@@ -168,11 +168,9 @@ export function AccountGroupItem({
                                 <ListItem hideBottomBorder onClick={handleRename}>
                                     Rename
                                 </ListItem>
-                                {account.isKeyPairExportable ? (
-                                    <ListItem hideBottomBorder onClick={handleExportPrivateKey}>
-                                        Export Private Key
-                                    </ListItem>
-                                ) : null}
+                                <ListItem hideBottomBorder onClick={handleExportKeys}>
+                                    Export Account Keys
+                                </ListItem>
                                 {allAccounts.isPending ? null : (
                                     <ListItem hideBottomBorder onClick={handleRemove}>
                                         Delete
@@ -207,7 +205,7 @@ function AccountAvatar({ account }: { account: SerializedUIAccount }) {
     }
     return (
         <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full [&_svg]:h-5 [&_svg]:w-5 [&_svg]:text-neutral-100 ${account.isLocked ? 'bg-neutral-90 dark:bg-neutral-20 [&_svg]:dark:text-neutral-50' : 'bg-primary-30 '}`}
+            className={`flex h-8 w-8 items-center justify-center rounded-full [&_svg]:h-5 [&_svg]:w-5 [&_svg]:text-iota-neutral-100 ${account.isLocked ? 'bg-iota-neutral-90 dark:bg-iota-neutral-20 [&_svg]:dark:text-iota-neutral-50' : 'bg-iota-primary-30 '}`}
         >
             {logo}
         </div>

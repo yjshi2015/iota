@@ -2408,44 +2408,6 @@
                 "format": "u64"
               }
             }
-          },
-          {
-            "type": "object",
-            "required": [
-              "chain_id",
-              "kind"
-            ],
-            "properties": {
-              "chain_id": {
-                "$ref": "#/components/schemas/CheckpointDigest"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "bridge_state_create"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "bridge_object_version",
-              "kind"
-            ],
-            "properties": {
-              "bridge_object_version": {
-                "description": "Radix-10 encoded 64-bit unsigned integer",
-                "type": "string",
-                "format": "u64"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "bridge_committee_init"
-                ]
-              }
-            }
           }
         ]
       },
@@ -3107,6 +3069,34 @@
             }
           },
           {
+            "description": "Certificate is cancelled due to congestion on shared objects; suggested gas price can be used to give this certificate more priority.",
+            "type": "object",
+            "required": [
+              "congested_objects",
+              "error",
+              "suggested_gas_price"
+            ],
+            "properties": {
+              "congested_objects": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ObjectId"
+                }
+              },
+              "error": {
+                "type": "string",
+                "enum": [
+                  "execution_cancelled_due_to_shared_object_congestion_v2"
+                ]
+              },
+              "suggested_gas_price": {
+                "type": "integer",
+                "format": "uint64",
+                "minimum": 0.0
+              }
+            }
+          },
+          {
             "description": "Address is denied for this coin type",
             "type": "object",
             "required": [
@@ -3159,6 +3149,21 @@
                 "type": "string",
                 "enum": [
                   "execution_cancelled_due_to_randomness_unavailable"
+                ]
+              }
+            }
+          },
+          {
+            "description": "A valid linkage was unable to be determined for the transaction or one of its commands.",
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string",
+                "enum": [
+                  "invalid_linkage"
                 ]
               }
             }
