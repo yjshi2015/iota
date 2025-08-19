@@ -82,6 +82,9 @@ jobs:
     needs: generate-tag
 
     steps:
+      - name: Install deps
+        shell: bash
+        run: apt install libudev -y
       - name: Create artifact name
         id: create-artifact
         shell: bash
