@@ -84,7 +84,7 @@ jobs:
     steps:
       - name: Install deps
         shell: bash
-        run: sudo apt install libudev -y
+        run: sudo apt install libudev-dev -y
       - name: Create artifact name
         id: create-artifact
         shell: bash
