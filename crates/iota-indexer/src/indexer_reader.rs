@@ -104,7 +104,6 @@ pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePac
 
 #[derive(Clone, Copy, Debug)]
 enum CursorPosition {
-    BeforeGlobalOrder(i64),
     InGlobalOrder(i64, i64),
 }
 
@@ -116,7 +115,6 @@ struct QueryTransactionBlocksSqlQueryBuilder<'a> {
     cursor_position: Option<CursorPosition>,
     is_descending: bool,
     limit: usize,
-    smallest_tx_seq_with_global_order: i64,
     order_str: String,
 }
 
@@ -129,7 +127,6 @@ impl<'a> QueryTransactionBlocksSqlQueryBuilder<'a> {
         cursor_position: Option<CursorPosition>,
         is_descending: bool,
         limit: usize,
-        smallest_tx_seq_with_global_order: i64,
     ) -> Self {
         Self {
             cursor_position,
@@ -139,25 +136,11 @@ impl<'a> QueryTransactionBlocksSqlQueryBuilder<'a> {
             source_table_or_query,
             optimistic_source_table_or_query,
             main_filter_condition,
-            smallest_tx_seq_with_global_order,
             order_str: if is_descending {
                 "DESC".into()
             } else {
                 "ASC".into()
             },
-        }
-    }
-
-    fn get_before_global_order_cursor_clause(&self) -> String {
-        let source_table_alias = self.source_table_alias;
-        if let Some(CursorPosition::BeforeGlobalOrder(cursor_tx_seq)) = self.cursor_position {
-            if self.is_descending {
-                format!("AND {source_table_alias}.{TX_SEQUENCE_NUMBER_STR} < {cursor_tx_seq}")
-            } else {
-                format!("AND {source_table_alias}.{TX_SEQUENCE_NUMBER_STR} > {cursor_tx_seq}")
-            }
-        } else {
-            "".to_string()
         }
     }
 
@@ -177,32 +160,6 @@ impl<'a> QueryTransactionBlocksSqlQueryBuilder<'a> {
         } else {
             "".to_string()
         }
-    }
-
-    fn get_query_before_global_order(&self, return_order_columns: bool) -> String {
-        let source_table_alias = self.source_table_alias;
-        let source_table_or_query = self.source_table_or_query;
-        let main_filter_condition = self.main_filter_condition;
-        let smallest_tx_seq_with_global_order = self.smallest_tx_seq_with_global_order;
-        let limit = self.limit;
-        let before_global_order_cursor_clause = self.get_before_global_order_cursor_clause();
-        let order_str = &self.order_str;
-        let fields_to_select = if return_order_columns {
-            format!("{TX_DIGEST_STR}, tx_digests.{TX_SEQUENCE_NUMBER_STR}")
-        } else {
-            TX_DIGEST_STR.into()
-        };
-
-        format!(
-            "SELECT {fields_to_select} \
-            FROM {source_table_or_query} \
-            JOIN tx_digests on {source_table_alias}.{TX_SEQUENCE_NUMBER_STR} = tx_digests.{TX_SEQUENCE_NUMBER_STR} \
-            WHERE {main_filter_condition} \
-            {before_global_order_cursor_clause} AND {source_table_alias}.{TX_SEQUENCE_NUMBER_STR} < {smallest_tx_seq_with_global_order} \
-            ORDER BY {source_table_alias}.{TX_SEQUENCE_NUMBER_STR} {order_str} \
-            LIMIT {limit} \
-            ",
-        )
     }
 
     fn get_query_with_global_order(&self, return_order_columns: bool) -> String {
@@ -252,16 +209,7 @@ impl<'a> QueryTransactionBlocksSqlQueryBuilder<'a> {
     }
 
     fn get_combined_query(&self) -> String {
-        let query_before_global_order = self.get_query_before_global_order(false);
-        let query_after_global_order = self.get_query_with_global_order(false);
-
-        combine_nonglobal_and_global_order_queries(
-            query_before_global_order,
-            query_after_global_order,
-            self.is_descending,
-            &self.cursor_position,
-            self.limit,
-        )
+        self.get_query_with_global_order(false)
     }
 }
 
@@ -273,7 +221,6 @@ struct QueryEventsSqlQueryBuilder<'a> {
     cursor_position: (CursorPosition, i64),
     is_descending: bool,
     limit: usize,
-    smallest_tx_seq_with_global_order: i64,
 }
 
 impl<'a> QueryEventsSqlQueryBuilder<'a> {
@@ -288,7 +235,6 @@ impl<'a> QueryEventsSqlQueryBuilder<'a> {
         cursor_position: (CursorPosition, i64),
         is_descending: bool,
         limit: usize,
-        smallest_tx_seq_with_global_order: i64,
     ) -> Self {
         Self {
             cursor_position,
@@ -298,58 +244,17 @@ impl<'a> QueryEventsSqlQueryBuilder<'a> {
             source_table_or_query,
             optimistic_source_table_or_query,
             main_filter_condition,
-            smallest_tx_seq_with_global_order,
-        }
-    }
-
-    fn get_before_global_order_cursor_clause(&self) -> String {
-        let source_table_alias = self.source_table_alias;
-        if let (CursorPosition::BeforeGlobalOrder(cursor_tx_seq), event_seq) = self.cursor_position
-        {
-            let comparator = if self.is_descending { "<" } else { ">" };
-            format!(
-                "(({source_table_alias}.{TX_SEQUENCE_NUMBER_STR}, e.{EVENT_SEQUENCE_NUMBER_STR}) {comparator} ({cursor_tx_seq}, {event_seq}))"
-            )
-        } else {
-            "1 = 1".to_string()
         }
     }
 
     fn get_with_global_order_cursor_clause(&self) -> String {
         let source_table_alias = self.source_table_alias;
-        if let (CursorPosition::InGlobalOrder(global_seq, optimistic_seq), event_seq) =
-            self.cursor_position
-        {
-            let comparator = if self.is_descending { "<" } else { ">" };
-            format!(
-                "(tx_global_order.global_sequence_number, tx_global_order.optimistic_sequence_number, {source_table_alias}.{EVENT_SEQUENCE_NUMBER_STR}) \
-                 {comparator} ({global_seq}, {optimistic_seq}, {event_seq})"
-            )
-        } else {
-            "1 = 1".to_string()
-        }
-    }
-
-    fn get_query_before_global_order(&self) -> String {
-        let source_table_alias = self.source_table_alias;
-        let source_table_or_query = self.source_table_or_query;
-        let main_filter_condition = self.main_filter_condition;
-        let smallest_tx_seq_with_global_order = self.smallest_tx_seq_with_global_order;
-        let limit = self.limit;
-        let before_global_order_cursor_clause = self.get_before_global_order_cursor_clause();
-        let fields_to_select = Self::STORED_EVENT_SQL_FIELDS;
-        let order_str = if self.is_descending { "DESC" } else { "ASC" };
-        let order_clause = format!(
-            "{source_table_alias}.{TX_SEQUENCE_NUMBER_STR} {order_str}, {source_table_alias}.{EVENT_SEQUENCE_NUMBER_STR} {order_str}"
-        );
-
+        let (CursorPosition::InGlobalOrder(global_seq, optimistic_seq), event_seq) =
+            self.cursor_position;
+        let comparator = if self.is_descending { "<" } else { ">" };
         format!(
-            "SELECT {source_table_alias}.{fields_to_select}
-             FROM {source_table_or_query}
-             WHERE {main_filter_condition} AND {before_global_order_cursor_clause} \
-             AND {source_table_alias}.{TX_SEQUENCE_NUMBER_STR} < {smallest_tx_seq_with_global_order} \
-             ORDER BY {order_clause} \
-             LIMIT {limit}",
+            "(tx_global_order.global_sequence_number, tx_global_order.optimistic_sequence_number, {source_table_alias}.{EVENT_SEQUENCE_NUMBER_STR}) \
+                 {comparator} ({global_seq}, {optimistic_seq}, {event_seq})"
         )
     }
 
@@ -403,42 +308,7 @@ impl<'a> QueryEventsSqlQueryBuilder<'a> {
     }
 
     fn get_combined_query(&self) -> String {
-        let query_before_global_order = self.get_query_before_global_order();
-        let query_after_global_order = self.get_query_with_global_order();
-
-        combine_nonglobal_and_global_order_queries(
-            query_before_global_order,
-            query_after_global_order,
-            self.is_descending,
-            &Some(self.cursor_position.0),
-            self.limit,
-        )
-    }
-}
-
-fn combine_nonglobal_and_global_order_queries(
-    query_before_global_order: String,
-    query_in_global_order: String,
-    is_descending: bool,
-    cursor_position: &Option<CursorPosition>,
-    limit: usize,
-) -> String {
-    if is_descending {
-        if matches!(cursor_position, Some(CursorPosition::BeforeGlobalOrder(_))) {
-            // if cursor is placed before global order bagan, and we are descending, we
-            // can safely omit global ordered entries
-            query_before_global_order
-        } else {
-            format!(
-                "({query_in_global_order}) UNION ALL ({query_before_global_order}) LIMIT {limit}"
-            )
-        }
-    } else if matches!(cursor_position, Some(CursorPosition::InGlobalOrder(_, _))) {
-        // if cursor is placed in globally ordered area and we are ascending, we can
-        // safely omit non-global-ordered entries
-        query_in_global_order
-    } else {
-        format!("({query_before_global_order}) UNION ALL ({query_in_global_order}) LIMIT {limit}")
+        self.get_query_with_global_order()
     }
 }
 
@@ -1335,17 +1205,6 @@ impl IndexerReader {
         .await
     }
 
-    async fn get_smallest_tx_seq_with_global_order(&self) -> IndexerResult<i64> {
-        // TODO: consider making it cached
-        let pool = self.get_pool();
-        Ok(run_query_async!(&pool, move |conn| {
-            tx_global_order::table
-                .select(diesel::dsl::min(tx_global_order::chk_tx_sequence_number))
-                .first::<Option<i64>>(conn)
-        })?
-        .unwrap_or(i64::MAX))
-    }
-
     #[expect(unused)]
     async fn query_transaction_blocks_impl_with_checkpointed_data_only(
         &self,
@@ -1634,39 +1493,23 @@ impl IndexerReader {
             CustomQuery(String),
         }
 
-        let smallest_tx_seq_with_global_order =
-            self.get_smallest_tx_seq_with_global_order().await?;
-
         let (old_order_tx_seq, cursor_position) = if let Some(cursor) = cursor {
             let pool = self.get_pool();
-            let tx_seq = run_query_async!(&pool, move |conn| {
-                tx_digests::table
-                    .select(tx_digests::tx_sequence_number)
-                    // we filter the tx_digests table because it is indexed by digest,
-                    // transactions (and other tables) are not
-                    .filter(tx_digests::tx_digest.eq(cursor.into_inner().to_vec()))
-                    .first::<i64>(conn)
-                    .optional()
+            let (global_seq, optimistic_seq, tx_seq) = run_query_async!(&pool, move |conn| {
+                tx_global_order::table
+                    .select((
+                        tx_global_order::global_sequence_number,
+                        tx_global_order::optimistic_sequence_number,
+                        tx_global_order::chk_tx_sequence_number,
+                    ))
+                    .filter(tx_global_order::tx_digest.eq(cursor.into_inner().to_vec()))
+                    .first::<(i64, i64, Option<i64>)>(conn)
             })?;
-            let cursor_position = match tx_seq {
-                Some(seq) if seq < smallest_tx_seq_with_global_order => {
-                    CursorPosition::BeforeGlobalOrder(seq)
-                }
-                _ => {
-                    let pool = self.get_pool();
-                    let (global_seq, optimistic_seq) = run_query_async!(&pool, move |conn| {
-                        tx_global_order::table
-                            .select((
-                                tx_global_order::global_sequence_number,
-                                tx_global_order::optimistic_sequence_number,
-                            ))
-                            .filter(tx_global_order::tx_digest.eq(cursor.into_inner().to_vec()))
-                            .first::<(i64, i64)>(conn)
-                    })?;
-                    CursorPosition::InGlobalOrder(global_seq, optimistic_seq)
-                }
-            };
-            (tx_seq, Some(cursor_position))
+
+            (
+                tx_seq,
+                Some(CursorPosition::InGlobalOrder(global_seq, optimistic_seq)),
+            )
         } else {
             (None, None)
         };
@@ -1797,7 +1640,6 @@ impl IndexerReader {
                     cursor_position,
                     is_descending,
                     limit,
-                    smallest_tx_seq_with_global_order,
                 );
 
                 FilteredDataSource::CustomQuery(query_builder.get_combined_query())
@@ -1815,7 +1657,6 @@ impl IndexerReader {
                     cursor_position,
                     is_descending,
                     limit,
-                    smallest_tx_seq_with_global_order,
                 );
                 let query_builder_recipients = QueryTransactionBlocksSqlQueryBuilder::new(
                     "recipients_table",
@@ -1825,21 +1666,8 @@ impl IndexerReader {
                     cursor_position,
                     is_descending,
                     limit,
-                    smallest_tx_seq_with_global_order,
                 );
                 let order_str = &query_builder_senders.order_str;
-
-                let inner_query_before_global_order = {
-                    let senders_before = query_builder_senders.get_query_before_global_order(true);
-                    let recipients_before =
-                        query_builder_recipients.get_query_before_global_order(true);
-
-                    format!(
-                        "SELECT {TX_DIGEST_STR} \
-                        FROM (({senders_before}) UNION ({recipients_before})) AS combined \
-                        ORDER BY {TX_SEQUENCE_NUMBER_STR} {order_str}"
-                    ) // we need UNION to remove duplicates, but we need to restore order after that
-                };
 
                 let inner_query_with_global_order = {
                     let senders_with = query_builder_senders.get_query_with_global_order(true);
@@ -1853,14 +1681,7 @@ impl IndexerReader {
                     ) // we need UNION to remove duplicates, but we need to restore order after that
                 };
 
-                let inner_query = combine_nonglobal_and_global_order_queries(
-                    inner_query_before_global_order,
-                    inner_query_with_global_order,
-                    is_descending,
-                    &cursor_position,
-                    limit,
-                );
-                FilteredDataSource::CustomQuery(inner_query)
+                FilteredDataSource::CustomQuery(inner_query_with_global_order)
             }
             Some(TransactionFilterKind::V1(TransactionFilter::TransactionKind(kind)))
             | Some(TransactionFilterKind::V2(TransactionFilterV2::TransactionKind(kind))) => {
@@ -1968,7 +1789,6 @@ impl IndexerReader {
                     cursor_position,
                     is_descending,
                     limit,
-                    smallest_tx_seq_with_global_order,
                 );
 
                 query_builder.get_combined_query()
@@ -2310,15 +2130,8 @@ impl IndexerReader {
         limit: usize,
         descending_order: bool,
     ) -> IndexerResult<Vec<IotaEvent>> {
-        let smallest_tx_seq_with_global_order =
-            self.get_smallest_tx_seq_with_global_order().await?;
-
         let (tx_cursor_position, event_seq) = self
-            .resolve_query_events_cursor(
-                smallest_tx_seq_with_global_order,
-                cursor,
-                descending_order,
-            )
+            .resolve_query_events_cursor(cursor, descending_order)
             .await?;
 
         let query = if let EventFilter::Sender(sender) = &filter {
@@ -2346,7 +2159,6 @@ impl IndexerReader {
                 (tx_cursor_position, event_seq),
                 descending_order,
                 limit,
-                smallest_tx_seq_with_global_order,
             );
             query_builder.get_combined_query()
         } else if let EventFilter::Transaction(tx_digest) = filter {
@@ -2406,7 +2218,6 @@ impl IndexerReader {
                 (tx_cursor_position, event_seq),
                 descending_order,
                 limit,
-                smallest_tx_seq_with_global_order,
             );
             query_builder.get_combined_query()
         };
@@ -2436,42 +2247,27 @@ impl IndexerReader {
 
     async fn resolve_query_events_cursor(
         &self,
-        smallest_tx_seq_with_global_order: i64,
         cursor: Option<EventID>,
         descending_order: bool,
     ) -> IndexerResult<(CursorPosition, i64)> {
-        let pool = self.get_pool();
         let result = if let Some(cursor) = cursor {
             let EventID {
                 tx_digest,
                 event_seq,
             } = cursor;
-            let tx_seq = run_query_async!(&pool, move |conn| {
-                tx_digests::table
-                    .select(tx_digests::tx_sequence_number)
-                    // we filter the tx_digests table because it is indexed by digest,
-                    // transactions (and other tables) are not
-                    .filter(tx_digests::tx_digest.eq(tx_digest.into_inner().to_vec()))
-                    .first::<i64>(conn)
-                    .optional()
-            })?;
-            let tx_cursor_position = match tx_seq {
-                Some(seq) if seq < smallest_tx_seq_with_global_order => {
-                    CursorPosition::BeforeGlobalOrder(seq)
-                }
-                _ => {
-                    let pool = self.get_pool();
-                    let (global_seq, optimistic_seq) = run_query_async!(&pool, move |conn| {
-                        tx_global_order::table
-                            .select((
-                                tx_global_order::global_sequence_number,
-                                tx_global_order::optimistic_sequence_number,
-                            ))
-                            .filter(tx_global_order::tx_digest.eq(tx_digest.into_inner().to_vec()))
-                            .first::<(i64, i64)>(conn)
-                    })?;
-                    CursorPosition::InGlobalOrder(global_seq, optimistic_seq)
-                }
+
+            let tx_cursor_position = {
+                let pool = self.get_pool();
+                let (global_seq, optimistic_seq) = run_query_async!(&pool, move |conn| {
+                    tx_global_order::table
+                        .select((
+                            tx_global_order::global_sequence_number,
+                            tx_global_order::optimistic_sequence_number,
+                        ))
+                        .filter(tx_global_order::tx_digest.eq(tx_digest.into_inner().to_vec()))
+                        .first::<(i64, i64)>(conn)
+                })?;
+                CursorPosition::InGlobalOrder(global_seq, optimistic_seq)
             };
             (tx_cursor_position, event_seq as i64)
         } else if descending_order {
@@ -2479,7 +2275,7 @@ impl IndexerReader {
             let max_event_seq = i64::MAX;
             (max_tx_seq, max_event_seq)
         } else {
-            let min_tx_seq = CursorPosition::BeforeGlobalOrder(-1);
+            let min_tx_seq = CursorPosition::InGlobalOrder(-1, -1);
             let min_event_seq = 0;
             (min_tx_seq, min_event_seq)
         };
