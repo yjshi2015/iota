@@ -11,7 +11,7 @@ import { useCurrentWallet } from './useCurrentWallet.js';
 import { useWallets } from './useWallets.js';
 import { useWalletStore } from './useWalletStore.js';
 
-export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
+export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' | 'attempted-connection' {
     const { mutateAsync: connectWallet } = useConnectWallet();
     const autoConnectEnabled = useWalletStore((state) => state.autoConnectEnabled);
     const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
@@ -56,6 +56,7 @@ export function useAutoConnectWallet(): 'disabled' | 'idle' | 'attempted' {
                     accountAddress: lastConnectedAccountAddress,
                     silent: true,
                 });
+                return 'attempted-connection';
             }
 
             return 'attempted';
