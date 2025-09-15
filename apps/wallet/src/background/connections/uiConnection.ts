@@ -55,6 +55,7 @@ import { AccountSourceType } from '../account-sources/accountSource';
 import { isDeriveBipPathAccountsFinder, isPersistAccountsFinder } from '_payloads/accounts-finder';
 import type { SerializedAccount } from '../accounts/account';
 import { LedgerAccount } from '../accounts/ledgerAccount';
+import { MnemonicMultisigAccountSource } from '../account-sources/mnemonicMultisigAccountSource';
 
 export class UiConnection extends Connection {
     public static readonly CHANNEL: PortChannelName = 'iota_ui<->background';
@@ -216,11 +217,15 @@ export class UiConnection extends Connection {
                     }
                     if (
                         !(accountSource instanceof MnemonicAccountSource) &&
+                        !(accountSource instanceof MnemonicMultisigAccountSource) &&
                         !(accountSource instanceof SeedAccountSource)
                     ) {
                         throw new Error('Invalid account source type');
                     }
-                    if (type === AccountSourceType.Mnemonic) {
+                    if (
+                        type === AccountSourceType.Mnemonic ||
+                        type === AccountSourceType.MnemonicMultisig
+                    ) {
                         await accountSource.verifyRecoveryData(data.entropy);
                     }
                     if (type === AccountSourceType.Seed) {

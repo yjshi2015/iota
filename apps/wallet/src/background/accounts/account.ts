@@ -17,6 +17,7 @@ import { accountsEvents } from './events';
 
 export enum AccountType {
     MnemonicDerived = 'mnemonic-derived',
+    MnemonicMultisigDerived = 'mnemonic-multisig-derived',
     SeedDerived = 'seed-derived',
     PrivateKeyDerived = 'private-key-derived',
     LedgerDerived = 'ledger-derived',

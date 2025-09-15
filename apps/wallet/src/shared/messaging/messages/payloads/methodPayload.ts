@@ -19,6 +19,7 @@ export type LedgerAccountsPublicKeys = {
 }[];
 export type PasswordRecoveryData =
     | { type: AccountSourceType.Mnemonic; accountSourceID: string; entropy: string }
+    | { type: AccountSourceType.MnemonicMultisig; accountSourceID: string; entropy: string }
     | { type: AccountSourceType.Seed; accountSourceID: string; seed: string };
 
 type MethodPayloads = {
@@ -27,6 +28,13 @@ type MethodPayloads = {
     createAccountSource:
         | {
               type: AccountSourceType.Mnemonic;
+              params: {
+                  password: string;
+                  entropy?: string;
+              };
+          }
+        | {
+              type: AccountSourceType.MnemonicMultisig;
               params: {
                   password: string;
                   entropy?: string;
@@ -44,6 +52,7 @@ type MethodPayloads = {
     unlockAccountSourceOrAccount: { id: string; password?: string };
     createAccounts:
         | { type: AccountType.MnemonicDerived; sourceID: string }
+        | { type: AccountType.MnemonicMultisigDerived; sourceID: string }
         | { type: AccountType.SeedDerived; sourceID: string }
         | { type: AccountType.PrivateKeyDerived; keyPair: string; password: string }
         | {

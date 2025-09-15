@@ -62,12 +62,29 @@ export function AddAccountPage() {
             ],
         },
         {
+            title: 'Create a new mnemonic (multisig) profile',
+            cards: [
+                {
+                    title: 'Create New (multisig)',
+                    icon: Create,
+                    actionType: AccountsFormType.NewMnemonicMultisig,
+                    isDisabled: createAccountsMutation.isPending,
+                },
+            ],
+        },
+        {
             title: 'Import',
             cards: [
                 {
                     title: 'Mnemonic',
                     icon: ImportPass,
                     actionType: AccountsFormType.ImportMnemonic,
+                    isDisabled: createAccountsMutation.isPending,
+                },
+                {
+                    title: 'Mnemonic (multisig)',
+                    icon: ImportPass,
+                    actionType: AccountsFormType.ImportMnemonicMultisig,
                     isDisabled: createAccountsMutation.isPending,
                 },
                 {
@@ -106,7 +123,18 @@ export function AddAccountPage() {
                     `/accounts/protect-account?accountsFormType=${AccountsFormType.NewMnemonic}`,
                 );
                 break;
+            case AccountsFormType.NewMnemonicMultisig:
+                setAccountsFormValues({ type: AccountsFormType.NewMnemonicMultisig });
+                ampli.clickedCreateNewAccount({ sourceFlow });
+                navigate(
+                    `/accounts/protect-account?accountsFormType=${AccountsFormType.NewMnemonicMultisig}`,
+                );
+                break;
             case AccountsFormType.ImportMnemonic:
+                ampli.clickedImportPassphrase({ sourceFlow });
+                navigate('/accounts/import-passphrase');
+                break;
+            case AccountsFormType.ImportMnemonicMultisig:
                 ampli.clickedImportPassphrase({ sourceFlow });
                 navigate('/accounts/import-passphrase');
                 break;

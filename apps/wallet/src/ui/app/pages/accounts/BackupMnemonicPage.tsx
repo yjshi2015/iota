@@ -29,7 +29,11 @@ export function BackupMnemonicPage() {
     const passphraseMutation = useExportPassphraseMutation();
 
     const navigate = useNavigate();
-    if (!isPending && selectedSource?.type !== AccountSourceType.Mnemonic) {
+    if (
+        !isPending &&
+        selectedSource?.type !== AccountSourceType.Mnemonic &&
+        selectedSource?.type !== AccountSourceType.MnemonicMultisig
+    ) {
         return <Navigate to="/" replace />;
     }
 

@@ -13,6 +13,7 @@ import {
 
 export enum AccountSourceType {
     Mnemonic = 'mnemonic',
+    MnemonicMultisig = 'mnemonic-multisig',
     Seed = 'seed',
 }
 

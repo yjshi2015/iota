@@ -35,10 +35,15 @@ import {
     WALLET_LOCK_DURATION_IN_MS,
 } from '@iota/core';
 import { AccountTooManyAttemptsError } from '_src/shared/accounts';
+import { MnemonicMultisigAccount } from './mnemonicMultisigAccount';
+import { MnemonicMultisigAccountSource } from '../account-sources/mnemonicMultisigAccountSource';
 
 function toAccount(account: SerializedAccount) {
     if (MnemonicAccount.isOfType(account)) {
         return new MnemonicAccount({ id: account.id, cachedData: account });
+    }
+    if (MnemonicMultisigAccount.isOfType(account)) {
+        return new MnemonicMultisigAccount({ id: account.id, cachedData: account });
     }
     if (SeedAccount.isOfType(account)) {
         return new SeedAccount({ id: account.id, cachedData: account });
@@ -247,13 +252,16 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
     if (isMethodPayload(payload, 'createAccounts')) {
         const newSerializedAccounts: Omit<SerializedAccount, 'id'>[] = [];
         const { type } = payload.args;
-        if (type === AccountType.MnemonicDerived) {
+        if (type === AccountType.MnemonicDerived || type === AccountType.MnemonicMultisigDerived) {
             const { sourceID } = payload.args;
             const accountSource = await getAccountSourceByID(payload.args.sourceID);
             if (!accountSource) {
                 throw new Error(`Account source ${sourceID} not found`);
             }
-            if (!(accountSource instanceof MnemonicAccountSource)) {
+            if (
+                !(accountSource instanceof MnemonicAccountSource) &&
+                !(accountSource instanceof MnemonicMultisigAccountSource)
+            ) {
                 throw new Error(`Invalid account source type`);
             }
             newSerializedAccounts.push(await accountSource.deriveAccount());

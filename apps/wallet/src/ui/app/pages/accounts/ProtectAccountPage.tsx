@@ -23,12 +23,16 @@ import { isSeedSerializedUiAccount } from '_src/background/accounts/seedAccount'
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/ledgerAccount';
 import { useFeature } from '@growthbook/growthbook-react';
 import { Feature, toast } from '@iota/core';
+import { isMnemonicMultisigSerializedUiAccount } from '_src/background/accounts/mnemonicMultisigAccount';
 
 const ALLOWED_ACCOUNT_TYPES: AccountsFormType[] = [
     AccountsFormType.NewMnemonic,
+    AccountsFormType.NewMnemonicMultisig,
     AccountsFormType.ImportMnemonic,
+    AccountsFormType.ImportMnemonicMultisig,
     AccountsFormType.ImportSeed,
     AccountsFormType.MnemonicSource,
+    AccountsFormType.MnemonicMultisigSource,
     AccountsFormType.SeedSource,
     AccountsFormType.ImportPrivateKey,
     AccountsFormType.ImportLedger,
@@ -79,6 +83,16 @@ export function ProtectAccountPage() {
                 if (
                     type === AccountsFormType.NewMnemonic &&
                     isMnemonicSerializedUiAccount(createdAccounts[0])
+                ) {
+                    navigate(`/accounts/backup/${createdAccounts[0].sourceID}`, {
+                        replace: true,
+                        state: {
+                            onboarding: true,
+                        },
+                    });
+                } else if (
+                    type === AccountsFormType.NewMnemonicMultisig &&
+                    isMnemonicMultisigSerializedUiAccount(createdAccounts[0])
                 ) {
                     navigate(`/accounts/backup/${createdAccounts[0].sourceID}`, {
                         replace: true,

@@ -14,10 +14,14 @@ import { AccountSourceType, type AccountSourceSerialized } from './accountSource
 import { MnemonicAccountSource } from './mnemonicAccountSource';
 import { SeedAccountSource } from './seedAccountSource';
 import { toEntropy } from '_src/shared/utils';
+import { MnemonicMultisigAccountSource } from './mnemonicMultisigAccountSource';
 
 function toAccountSource(accountSource: AccountSourceSerialized) {
     if (MnemonicAccountSource.isOfType(accountSource)) {
         return new MnemonicAccountSource(accountSource.id);
+    }
+    if (MnemonicMultisigAccountSource.isOfType(accountSource)) {
+        return new MnemonicMultisigAccountSource(accountSource.id);
     }
     if (SeedAccountSource.isOfType(accountSource)) {
         return new SeedAccountSource(accountSource.id);
@@ -58,6 +62,16 @@ async function createAccountSource({ type, params }: MethodPayload<'createAccoun
                     await MnemonicAccountSource.createNew({
                         password,
                         entropyInput: entropy ? toEntropy(entropy) : undefined,
+                    }),
+                )
+            ).toUISerialized();
+        case AccountSourceType.MnemonicMultisig:
+            const entropyMultisig = params.entropy;
+            return (
+                await MnemonicMultisigAccountSource.save(
+                    await MnemonicMultisigAccountSource.createNew({
+                        password,
+                        entropyInput: entropyMultisig ? toEntropy(entropyMultisig) : undefined,
                     }),
                 )
             ).toUISerialized();
@@ -124,7 +138,10 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
         if (!accountSource) {
             throw new Error('Account source not found');
         }
-        if (!(accountSource instanceof MnemonicAccountSource)) {
+        if (
+            !(accountSource instanceof MnemonicAccountSource) &&
+            !(accountSource instanceof MnemonicMultisigAccountSource)
+        ) {
             throw new Error('Invalid account source type');
         }
         uiConnection.send(
@@ -167,11 +184,12 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
         }
         if (
             !(accountSource instanceof MnemonicAccountSource) &&
+            !(accountSource instanceof MnemonicMultisigAccountSource) &&
             !(accountSource instanceof SeedAccountSource)
         ) {
             throw new Error('Invalid account source type');
         }
-        if (type === AccountSourceType.Mnemonic) {
+        if (type === AccountSourceType.Mnemonic || type === AccountSourceType.MnemonicMultisig) {
             await accountSource.verifyRecoveryData(payload.args.data.entropy);
         }
         if (type === AccountSourceType.Seed) {

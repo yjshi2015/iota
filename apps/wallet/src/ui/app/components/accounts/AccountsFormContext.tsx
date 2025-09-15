@@ -14,19 +14,25 @@ import {
 
 export enum AccountsFormType {
     NewMnemonic = 'new-mnemonic',
+    NewMnemonicMultisig = 'new-mnemonic-multisig',
     ImportMnemonic = 'import-mnemonic',
+    ImportMnemonicMultisig = 'import-mnemonic-multisig',
     ImportSeed = 'import-seed',
     ImportPrivateKey = 'import-private-key',
     ImportLedger = 'import-ledger',
     MnemonicSource = 'mnemonic-source',
+    MnemonicMultisigSource = 'mnemonic-multisig-source',
     SeedSource = 'seed-source',
 }
 
 export type AccountsFormValues =
     | { type: AccountsFormType.NewMnemonic }
+    | { type: AccountsFormType.NewMnemonicMultisig }
     | { type: AccountsFormType.ImportMnemonic; entropy: string }
+    | { type: AccountsFormType.ImportMnemonicMultisig; entropy: string }
     | { type: AccountsFormType.ImportSeed; seed: string }
     | { type: AccountsFormType.MnemonicSource; sourceID: string }
+    | { type: AccountsFormType.MnemonicMultisigSource; sourceID: string }
     | { type: AccountsFormType.SeedSource; sourceID: string }
     | { type: AccountsFormType.ImportPrivateKey; keyPair: string }
     | {

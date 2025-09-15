@@ -30,12 +30,14 @@ import { isSeedSerializedUiAccount } from '_src/background/accounts/seedAccount'
 
 const ACCOUNT_TYPE_TO_LABEL: Record<AccountType, string> = {
     [AccountType.MnemonicDerived]: 'Mnemonic',
+    [AccountType.MnemonicMultisigDerived]: 'Mnemonic (multisig)',
     [AccountType.SeedDerived]: 'Seed',
     [AccountType.PrivateKeyDerived]: 'Private Key',
     [AccountType.LedgerDerived]: 'Ledger',
 };
 const ACCOUNTS_WITH_ENABLED_BALANCE_FINDER: AccountType[] = [
     AccountType.MnemonicDerived,
+    AccountType.MnemonicMultisigDerived,
     AccountType.SeedDerived,
     AccountType.LedgerDerived,
 ];
@@ -62,7 +64,9 @@ export function AccountGroup({
     const navigate = useNavigate();
     const activeAccount = useActiveAccount();
     const createAccountMutation = useCreateAccountsMutation();
-    const isMnemonicDerivedGroup = type === AccountType.MnemonicDerived;
+    console.log('Account type:', type);
+    const isMnemonicDerivedGroup =
+        type === AccountType.MnemonicDerived || type === AccountType.MnemonicMultisigDerived;
     const isSeedDerivedGroup = type === AccountType.SeedDerived;
     const [accountsFormValues, setAccountsFormValues] = useAccountsFormContext();
     const [isPasswordModalVisible, setPasswordModalVisible] = useState(false);
@@ -77,7 +81,9 @@ export function AccountGroup({
         // prevent the collapsible from closing when clicking the "new" button
         e.stopPropagation();
         const accountsFormType = isMnemonicDerivedGroup
-            ? AccountsFormType.MnemonicSource
+            ? type === AccountType.MnemonicDerived
+                ? AccountsFormType.MnemonicSource
+                : AccountsFormType.MnemonicMultisigSource
             : AccountsFormType.SeedSource;
         setAccountsFormValues({
             type: accountsFormType,
