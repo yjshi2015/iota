@@ -136,7 +136,7 @@ export function AddAccountPage() {
                 break;
             case AccountsFormType.ImportMnemonicMultisig:
                 ampli.clickedImportPassphrase({ sourceFlow });
-                navigate('/accounts/import-passphrase');
+                navigate('/accounts/import-passphrase-multisig');
                 break;
             case AccountsFormType.ImportPrivateKey:
                 ampli.clickedImportPrivateKey({ sourceFlow });

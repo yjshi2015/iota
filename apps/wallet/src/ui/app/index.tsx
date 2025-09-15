@@ -60,11 +60,14 @@ import { StakingPage } from './staking/home';
 import { StorageMigrationPage } from './pages/StorageMigrationPage';
 import { AccountsFinderPage } from './pages/accounts/manage/accounts-finder/AccountsFinderPage';
 import { AccountsFinderIntroPage } from './pages/accounts/manage/accounts-finder/AccountsFinderIntroPage';
+import { ImportPassphraseMultisigPage } from './pages/accounts/ImportPassphraseMultisigPage';
+import { MultisigSigningPage } from './pages/home/multisig-signing';
 
 const HIDDEN_MENU_PATHS = [
     '/nft-details',
     '/nft-transfer',
     '/receipt',
+    '/multisig-signing',
     '/send',
     '/send/select',
     '/apps/disconnectapp',
@@ -178,6 +181,7 @@ export function App() {
                 <Route path="nft-transfer/:nftId" element={<NftTransferPage />} />
                 <Route path="nfts/*" element={<AssetsPage />} />
                 <Route path="receipt" element={<ReceiptPage />} />
+                <Route path="multisig-signing" element={<MultisigSigningPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send/select" element={<CoinsSelectorPage />} />
                 <Route path="stake/*" element={<StakingPage />} />
@@ -190,6 +194,10 @@ export function App() {
                 <Route path="add-account" element={<AddAccountPage />} />
                 <Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
                 <Route path="import-passphrase" element={<ImportPassphrasePage />} />
+                <Route
+                    path="import-passphrase-multisig"
+                    element={<ImportPassphraseMultisigPage />}
+                />
                 <Route path="import-private-key" element={<ImportPrivateKeyPage />} />
                 <Route path="import-seed" element={<ImportSeedPage />} />
                 <Route path="manage" element={<ManageAccountsPage />} />

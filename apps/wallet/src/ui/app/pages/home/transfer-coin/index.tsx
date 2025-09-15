@@ -108,6 +108,8 @@ export function TransferCoinPage() {
     });
     const { data: transactionData, isPending } = sendCoinTransactionQuery;
 
+    const isMultisigSigning = activeAccount?.type === 'mnemonic-multisig-derived';
+
     const executeTransfer = useMutation({
         mutationFn: async () => {
             if (!transactionData?.transaction || !signer) {
@@ -118,17 +120,27 @@ export function TransferCoinPage() {
                     name: 'send-tokens',
                 },
                 (span) => {
-                    try {
-                        return signer.signAndExecuteTransaction({
-                            transactionBlock: transactionData.transaction,
-                            options: {
-                                showInput: true,
-                                showEffects: true,
-                                showEvents: true,
-                            },
-                        });
-                    } finally {
-                        span?.end();
+                    if (isMultisigSigning) {
+                        try {
+                            return signer.signTransaction({
+                                transaction: transactionData.transaction,
+                            });
+                        } finally {
+                            span?.end();
+                        }
+                    } else {
+                        try {
+                            return signer.signAndExecuteTransaction({
+                                transactionBlock: transactionData.transaction,
+                                options: {
+                                    showInput: true,
+                                    showEffects: true,
+                                    showEvents: true,
+                                },
+                            });
+                        } finally {
+                            span?.end();
+                        }
                     }
                 },
             );
@@ -141,10 +153,19 @@ export function TransferCoinPage() {
                 coinType: selectedCoinType!,
             });
 
-            const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
-                response.digest,
-            )}&from=transactions`;
-            return navigate(receiptUrl);
+            if (isMultisigSigning) {
+                const multisigSigningUrl = `/multisig-signing?txbytes=${encodeURIComponent(
+                    (response as SignedTransaction).bytes,
+                )}&signature=${encodeURIComponent(
+                    (response as SignedTransaction).signature,
+                )}&from=transactions`;
+                return navigate(multisigSigningUrl);
+            } else {
+                const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+                    (response as IotaTransactionBlockResponse).digest,
+                )}&from=transactions`;
+                return navigate(receiptUrl);
+            }
         },
         onError: (error) => {
             toast.error(

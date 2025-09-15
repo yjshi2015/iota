@@ -13,6 +13,7 @@ import { type WalletSigner } from './walletSigner';
 
 const ACCOUNT_TYPES_WITH_BACKGROUND_SIGNER: AccountType[] = [
     AccountType.MnemonicDerived,
+    AccountType.MnemonicMultisigDerived,
     AccountType.SeedDerived,
     AccountType.PrivateKeyDerived,
 ];

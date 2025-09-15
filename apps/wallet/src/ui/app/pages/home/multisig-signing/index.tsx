@@ -1,0 +1,60 @@
+// Copyright (c) 2025 IOTA Stiftung
+// SPDX-License-Identifier: Apache-2.0
+
+import { Loading, Overlay } from '_components';
+import { useActiveAddress, useUnlockedGuard } from '_hooks';
+import { useCallback, useState } from 'react';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Checkmark } from '@iota/apps-ui-icons';
+import { AnimatedQRCode } from '@keystonehq/animated-qr';
+import { UR } from '@keystonehq/keystone-sdk';
+
+export function MultisigSigningPage() {
+    const [searchParams] = useSearchParams();
+    const [showModal, setShowModal] = useState(true);
+    const activeAddress = useActiveAddress();
+
+    const transaction = searchParams.get('txbytes');
+    const signature = searchParams.get('signature');
+
+    const buffer = Buffer.from(JSON.stringify({ transaction, signature }), 'utf8');
+    const ur = UR.from(buffer);
+
+    const fromParam = searchParams.get('from');
+
+    // console.log('payload', payload.length);
+    const navigate = useNavigate();
+
+    const onClose = useCallback(() => {
+        fromParam ? navigate(`/${fromParam}`) : navigate(-1);
+    }, [fromParam, navigate]);
+
+    const isGuardLoading = useUnlockedGuard();
+
+    if (!transaction || !signature || !activeAddress) {
+        return <Navigate to="/transactions" replace={true} />;
+    }
+
+    return (
+        <Loading loading={isGuardLoading}>
+            <Overlay
+                showModal={showModal}
+                setShowModal={setShowModal}
+                title={'Transaction Data'}
+                closeOverlay={onClose}
+                closeIcon={<Checkmark fill="currentColor" className="text-iota-light h-8 w-8" />}
+            >
+                <div className="flex h-full flex-col items-center justify-center gap-xs">
+                    <AnimatedQRCode
+                        type={ur.type}
+                        cbor={ur.cbor.toString('hex')}
+                        options={{ size: 280, capacity: 1000 }}
+                    />
+                    <span className="text-title-sm text-iota-neutral-10 dark:text-iota-neutral-92">
+                        Scan this QR code with the IOTA Aegis app
+                    </span>
+                </div>
+            </Overlay>
+        </Loading>
+    );
+}
