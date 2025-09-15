@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Loading, Overlay } from '_components';
-import { useActiveAddress, useUnlockedGuard } from '_hooks';
+import { useActiveAddress, useAppSelector, useUnlockedGuard } from '_hooks';
 import { useCallback, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Checkmark } from '@iota/apps-ui-icons';
@@ -10,6 +10,7 @@ import { AnimatedQRCode } from '@keystonehq/animated-qr';
 import { UR } from '@keystonehq/keystone-sdk';
 
 export function MultisigSigningPage() {
+    const network = useAppSelector(({ app }) => app.network);
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
     const activeAddress = useActiveAddress();
@@ -17,12 +18,11 @@ export function MultisigSigningPage() {
     const transaction = searchParams.get('txbytes');
     const signature = searchParams.get('signature');
 
-    const buffer = Buffer.from(JSON.stringify({ transaction, signature }), 'utf8');
+    const buffer = Buffer.from(JSON.stringify({ transaction, signature, network }), 'utf8');
     const ur = UR.from(buffer);
 
     const fromParam = searchParams.get('from');
 
-    // console.log('payload', payload.length);
     const navigate = useNavigate();
 
     const onClose = useCallback(() => {
@@ -31,7 +31,7 @@ export function MultisigSigningPage() {
 
     const isGuardLoading = useUnlockedGuard();
 
-    if (!transaction || !signature || !activeAddress) {
+    if (!transaction || !signature || !network || !activeAddress) {
         return <Navigate to="/transactions" replace={true} />;
     }
 

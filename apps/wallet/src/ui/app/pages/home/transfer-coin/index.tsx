@@ -36,6 +36,8 @@ import { Button, ButtonType, LoadingIndicator } from '@iota/apps-ui-kit';
 import { Loader } from '@iota/apps-ui-icons';
 import { FormikProvider, useFormik } from 'formik';
 import { shouldResolveInputAsName } from '@iota/core/src/utils/validation/names';
+import { type SignedTransaction } from 'node_modules/@iota/wallet-standard/src';
+import { type IotaTransactionBlockResponse } from '@iota/iota-sdk/client';
 
 const INITIAL_VALUES: SendTokenFormValues = {
     to: '',
