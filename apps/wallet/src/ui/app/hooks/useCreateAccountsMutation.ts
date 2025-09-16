@@ -22,7 +22,6 @@ function validateAccountFormValues<T extends AccountsFormType>(
     }
     if (
         values.type !== AccountsFormType.MnemonicSource &&
-        values.type !== AccountsFormType.MnemonicMultisigSource &&
         values.type !== AccountsFormType.SeedSource &&
         !password
     ) {
@@ -50,7 +49,6 @@ export function useCreateAccountsMutation() {
         [AccountsFormType.ImportMnemonicMultisig]: AmpliAccountType.Derived,
         [AccountsFormType.ImportSeed]: AmpliAccountType.Derived,
         [AccountsFormType.MnemonicSource]: AmpliAccountType.Derived,
-        [AccountsFormType.MnemonicMultisigSource]: AmpliAccountType.Derived,
         [AccountsFormType.SeedSource]: AmpliAccountType.Derived,
         [AccountsFormType.ImportPrivateKey]: AmpliAccountType.ImportPrivateKey,
         [AccountsFormType.ImportLedger]: AmpliAccountType.Ledger,
@@ -110,20 +108,6 @@ export function useCreateAccountsMutation() {
                 }
                 createdAccounts = await backgroundClient.createAccounts({
                     type: AccountType.MnemonicDerived,
-                    sourceID: accountsFormValues.sourceID,
-                });
-            } else if (
-                type === AccountsFormType.MnemonicMultisigSource &&
-                validateAccountFormValues(type, accountsFormValues, password)
-            ) {
-                if (password) {
-                    await backgroundClient.unlockAccountSourceOrAccount({
-                        password,
-                        id: accountsFormValues.sourceID,
-                    });
-                }
-                createdAccounts = await backgroundClient.createAccounts({
-                    type: AccountType.MnemonicMultisigDerived,
                     sourceID: accountsFormValues.sourceID,
                 });
             } else if (

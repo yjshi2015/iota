@@ -584,6 +584,18 @@ export class BackgroundClient {
         );
     }
 
+    public finalizeMultisigAccount(args: MethodPayload<'finalizeMultisigAccount'>['args']) {
+        return lastValueFrom(
+            this.sendMessage(
+                createMessage<MethodPayload<'finalizeMultisigAccount'>>({
+                    type: 'method-payload',
+                    method: 'finalizeMultisigAccount',
+                    args,
+                }),
+            ).pipe(take(1)),
+        );
+    }
+
     public deriveBipPathAccountsFinder(sourceID: string, derivationOptions: MakeDerivationOptions) {
         return lastValueFrom(
             this.sendMessage(

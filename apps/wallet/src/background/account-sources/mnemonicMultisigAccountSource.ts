@@ -150,7 +150,11 @@ export class MnemonicMultisigAccountSource extends AccountSource<
                 ? makeDerivationPath(derivationOptions)
                 : await this.#getAvailableDerivationPath();
         const keyPair = await this.deriveKeyPair(derivationPath);
-        return MnemonicMultisigAccount.createNew({ keyPair, derivationPath, sourceID: this.id });
+        return MnemonicMultisigAccount.createNew({
+            keyPair,
+            derivationPath,
+            sourceID: this.id,
+        });
     }
 
     async derivePubKey(derivationOptions: MakeDerivationOptions): Promise<Ed25519PublicKey> {

@@ -94,6 +94,17 @@ type MethodPayloads = {
         data: PasswordRecoveryData;
     };
     removeAccount: { accountID: string };
+    finalizeMultisigAccount: {
+        accountID: string;
+        ourPubKey: string;
+        multisigConfig: {
+            threshold: number;
+            pubKeys: { pubKey: string; weight: number }[];
+        };
+    };
+    multisigAccountFinalizedResponse: {
+        account: SerializedUIAccount;
+    };
 };
 
 type Methods = keyof MethodPayloads;

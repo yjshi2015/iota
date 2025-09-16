@@ -62,6 +62,7 @@ import { AccountsFinderPage } from './pages/accounts/manage/accounts-finder/Acco
 import { AccountsFinderIntroPage } from './pages/accounts/manage/accounts-finder/AccountsFinderIntroPage';
 import { ImportPassphraseMultisigPage } from './pages/accounts/ImportPassphraseMultisigPage';
 import { MultisigSigningPage } from './pages/home/multisig-signing';
+import { MultisigConfigurePage } from './pages/accounts/MultisigConfigurePage';
 
 const HIDDEN_MENU_PATHS = [
     '/nft-details',
@@ -198,6 +199,7 @@ export function App() {
                     path="import-passphrase-multisig"
                     element={<ImportPassphraseMultisigPage />}
                 />
+                <Route path="configure-multisig" element={<MultisigConfigurePage />} />
                 <Route path="import-private-key" element={<ImportPrivateKeyPage />} />
                 <Route path="import-seed" element={<ImportSeedPage />} />
                 <Route path="manage" element={<ManageAccountsPage />} />

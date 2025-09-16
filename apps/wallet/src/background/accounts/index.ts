@@ -453,5 +453,52 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
         await uiConnection.send(createMessage({ type: 'done' }, msg.id));
         return true;
     }
+    if (isMethodPayload(payload, 'finalizeMultisigAccount')) {
+        const { accountID, ourPubKey, multisigConfig } = payload.args;
+        let account = await getAccountByID(accountID);
+        if (!account) {
+            throw new Error(`Account with id ${accountID} not found.`);
+        }
+
+        if (account.type !== AccountType.MnemonicMultisigDerived) {
+            throw new Error(`Account with id ${accountID} is not a multisig account.`);
+        }
+
+        if (!ourPubKey || !multisigConfig) {
+            throw new Error('Missing parameters to finalize multisig account.');
+        }
+
+        const sortedPubKeys = multisigConfig.pubKeys.sort((a, b) =>
+            a.pubKey.localeCompare(b.pubKey),
+        );
+
+        const sortedMultisigConfig = {
+            threshold: multisigConfig.threshold,
+            pubKeys: sortedPubKeys,
+        };
+
+        await (account as MnemonicMultisigAccount).setMultisigConfig(sortedMultisigConfig);
+        await (account as MnemonicMultisigAccount).buildMultisig();
+
+        account = (await getAccountByID(accountID)) as MnemonicMultisigAccount;
+
+        if (!account || !account.multisigConfig) {
+            throw new Error(`Failed finalizing account with id ${accountID}`);
+        }
+
+        uiConnection.send(
+            createMessage<MethodPayload<'multisigAccountFinalizedResponse'>>(
+                {
+                    method: 'multisigAccountFinalizedResponse',
+                    type: 'method-payload',
+                    args: {
+                        account: await account.toUISerialized(),
+                    },
+                },
+                msg.id,
+            ),
+        );
+        return true;
+    }
     return false;
 }

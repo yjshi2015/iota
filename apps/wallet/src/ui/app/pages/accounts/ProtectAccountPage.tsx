@@ -32,7 +32,6 @@ const ALLOWED_ACCOUNT_TYPES: AccountsFormType[] = [
     AccountsFormType.ImportMnemonicMultisig,
     AccountsFormType.ImportSeed,
     AccountsFormType.MnemonicSource,
-    AccountsFormType.MnemonicMultisigSource,
     AccountsFormType.SeedSource,
     AccountsFormType.ImportPrivateKey,
     AccountsFormType.ImportLedger,
@@ -91,15 +90,23 @@ export function ProtectAccountPage() {
                         },
                     });
                 } else if (
-                    type === AccountsFormType.NewMnemonicMultisig &&
+                    (type === AccountsFormType.NewMnemonicMultisig ||
+                        type === AccountsFormType.ImportMnemonicMultisig) &&
                     isMnemonicMultisigSerializedUiAccount(createdAccounts[0])
                 ) {
-                    navigate(`/accounts/backup/${createdAccounts[0].sourceID}`, {
-                        replace: true,
-                        state: {
-                            onboarding: true,
+                    navigate(
+                        `/accounts/configure-multisig?ourPubKey=${encodeURIComponent(
+                            createdAccounts[0].publicKey,
+                        )}&sourceID=${encodeURIComponent(
+                            createdAccounts[0].sourceID,
+                        )}&accountID=${encodeURIComponent(createdAccounts[0].id)}`,
+                        {
+                            replace: true,
+                            state: {
+                                onboarding: true,
+                            },
                         },
-                    });
+                    );
                 } else if (
                     featureAccountFinderEnabled &&
                     REDIRECT_TO_ACCOUNTS_FINDER.includes(type) &&

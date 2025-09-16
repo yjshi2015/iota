@@ -64,7 +64,6 @@ export function AccountGroup({
     const navigate = useNavigate();
     const activeAccount = useActiveAccount();
     const createAccountMutation = useCreateAccountsMutation();
-    console.log('Account type:', type);
     const isMnemonicDerivedGroup =
         type === AccountType.MnemonicDerived || type === AccountType.MnemonicMultisigDerived;
     const isSeedDerivedGroup = type === AccountType.SeedDerived;
@@ -74,16 +73,14 @@ export function AccountGroup({
     const accountSource = accountSources?.find(({ id }) => id === accountSourceID);
 
     async function handleAdd(e: React.MouseEvent<HTMLButtonElement>) {
-        if (!accountSource) return;
+        if (!accountSource || isMnemonicMultisig) return;
 
         setIsCollapsibleGroupOpen(true);
 
         // prevent the collapsible from closing when clicking the "new" button
         e.stopPropagation();
         const accountsFormType = isMnemonicDerivedGroup
-            ? type === AccountType.MnemonicDerived
-                ? AccountsFormType.MnemonicSource
-                : AccountsFormType.MnemonicMultisigSource
+            ? AccountsFormType.MnemonicSource
             : AccountsFormType.SeedSource;
         setAccountsFormValues({
             type: accountsFormType,
@@ -121,6 +118,8 @@ export function AccountGroup({
     const showMoreButton = Object.values(dropdownVisibility).some((v) => v);
 
     const hasLegacyAccount = accounts.some((account) => isLegacyAccount(account));
+
+    const isMnemonicMultisig = type === AccountType.MnemonicMultisigDerived;
 
     function groupAccountsByAccountIndex(accounts: SerializedUIAccount[]) {
         const accountWalletGroups = accounts.reduce(
@@ -171,7 +170,9 @@ export function AccountGroup({
                                     size={ChipSize.Small}
                                 />
                             )}
-                            {(isMnemonicDerivedGroup || isSeedDerivedGroup) && accountSource ? (
+                            {(isMnemonicDerivedGroup || isSeedDerivedGroup) &&
+                            accountSource &&
+                            !isMnemonicMultisig ? (
                                 <Button
                                     size={ButtonSize.Small}
                                     type={ButtonType.Ghost}

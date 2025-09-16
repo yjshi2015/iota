@@ -59,13 +59,8 @@ export function AddAccountPage() {
                     actionType: AccountsFormType.NewMnemonic,
                     isDisabled: createAccountsMutation.isPending,
                 },
-            ],
-        },
-        {
-            title: 'Create a new mnemonic (multisig) profile',
-            cards: [
                 {
-                    title: 'Create New (multisig)',
+                    title: 'Create New (MultiSig)',
                     icon: Create,
                     actionType: AccountsFormType.NewMnemonicMultisig,
                     isDisabled: createAccountsMutation.isPending,
@@ -82,7 +77,7 @@ export function AddAccountPage() {
                     isDisabled: createAccountsMutation.isPending,
                 },
                 {
-                    title: 'Mnemonic (multisig)',
+                    title: 'Mnemonic (MultiSig)',
                     icon: ImportPass,
                     actionType: AccountsFormType.ImportMnemonicMultisig,
                     isDisabled: createAccountsMutation.isPending,

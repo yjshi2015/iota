@@ -21,7 +21,6 @@ export enum AccountsFormType {
     ImportPrivateKey = 'import-private-key',
     ImportLedger = 'import-ledger',
     MnemonicSource = 'mnemonic-source',
-    MnemonicMultisigSource = 'mnemonic-multisig-source',
     SeedSource = 'seed-source',
 }
 
@@ -32,7 +31,6 @@ export type AccountsFormValues =
     | { type: AccountsFormType.ImportMnemonicMultisig; entropy: string }
     | { type: AccountsFormType.ImportSeed; seed: string }
     | { type: AccountsFormType.MnemonicSource; sourceID: string }
-    | { type: AccountsFormType.MnemonicMultisigSource; sourceID: string }
     | { type: AccountsFormType.SeedSource; sourceID: string }
     | { type: AccountsFormType.ImportPrivateKey; keyPair: string }
     | {

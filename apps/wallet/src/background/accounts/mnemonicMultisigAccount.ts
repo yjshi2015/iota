@@ -13,12 +13,28 @@ import {
 } from './account';
 import { fromExportedKeypair } from '_src/shared/utils';
 import { MnemonicAccountSource } from '../account-sources/mnemonicAccountSource';
+import { accountsEvents } from './events';
+import { getDB } from '../db';
+import { MultiSigPublicKey } from '@iota/iota-sdk/multisig/publickey';
+import { Ed25519PublicKey } from '@iota/iota-sdk/keypairs/ed25519';
+
+export interface PubKeyWeightPair {
+    pubKey: string;
+    weight: number;
+}
+
+export interface MultisigConfig {
+    threshold: number;
+    pubKeys: PubKeyWeightPair[];
+}
 
 export interface MnemonicMultisigSerializedAccount extends SerializedAccount {
     type: AccountType.MnemonicMultisigDerived;
     sourceID: string;
     derivationPath: string;
     publicKey: string;
+    multisigConfig: MultisigConfig | null;
+    multisigPublicKey: string | null;
 }
 
 export interface MnemonicMultisigSerializedUiAccount extends SerializedUIAccount {
@@ -69,6 +85,8 @@ export class MnemonicMultisigAccount
             selected: false,
             nickname: null,
             createdAt: Date.now(),
+            multisigConfig: null,
+            multisigPublicKey: null,
         };
     }
 
@@ -146,6 +164,10 @@ export class MnemonicMultisigAccount
         return this.getCachedData().then(({ sourceID }) => sourceID);
     }
 
+    get multisigConfig() {
+        return this.getCachedData().then(({ multisigConfig }) => multisigConfig);
+    }
+
     async exportKeyPair(password: string): Promise<string> {
         const { derivationPath } = await this.getStoredData();
         const mnemonicSource = await this.#getMnemonicSource();
@@ -163,5 +185,34 @@ export class MnemonicMultisigAccount
 
     async #getMnemonicSource() {
         return new MnemonicAccountSource((await this.getStoredData()).sourceID);
+    }
+
+    public async setMultisigConfig(multisigConfig: MultisigConfig) {
+        await (await getDB()).accounts.update(this.id, { multisigConfig });
+        accountsEvents.emit('accountStatusChanged', { accountID: this.id });
+    }
+
+    public async buildMultisig() {
+        const { multisigConfig } = await this.getStoredData();
+
+        if (!multisigConfig) {
+            throw new Error('Multisig config not set');
+        }
+
+        const multisigPublicKey = MultiSigPublicKey.fromPublicKeys({
+            threshold: multisigConfig.threshold,
+            publicKeys: multisigConfig.pubKeys.map((pubKeyWeightPair) => ({
+                publicKey: new Ed25519PublicKey(pubKeyWeightPair.pubKey),
+                weight: pubKeyWeightPair.weight,
+            })),
+        });
+
+        const multisigAddress = multisigPublicKey.toIotaAddress();
+
+        await (
+            await getDB()
+        ).accounts.update(this.id, { multisigPublicKey, address: multisigAddress });
+
+        accountsEvents.emit('accountStatusChanged', { accountID: this.id });
     }
 }
