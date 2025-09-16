@@ -36,9 +36,7 @@ export function MultisigConfigurePage() {
         threshold: number;
         pubKeys: { pubKey: string; weight: number }[];
     }) {
-        console.log('handle on submit', { threshold, pubKeys });
-
-        const finalizeResponse = await backgroundClient.finalizeMultisigAccount({
+        await backgroundClient.finalizeMultisigAccount({
             accountID: accountID!,
             ourPubKey: ourPubKey!,
             multisigConfig: {
@@ -46,8 +44,6 @@ export function MultisigConfigurePage() {
                 pubKeys,
             },
         });
-
-        console.log('finalizeResponse', finalizeResponse);
 
         navigate(`/accounts/backup/${sourceID}`, {
             replace: true,
