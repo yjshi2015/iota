@@ -339,7 +339,6 @@ impl BaseCommitter {
             let voter = voting_block.reference().author;
             if voting_block
                 .ancestors()
-                .iter()
                 .all(|ancestor| ancestor.author != leader)
             {
                 tracing::trace!(

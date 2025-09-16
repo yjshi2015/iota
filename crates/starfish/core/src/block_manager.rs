@@ -286,10 +286,10 @@ impl BlockManager {
         block: &VerifiedBlockHeader,
         ancestors: &[VerifiedBlockHeader],
     ) -> ConsensusResult<()> {
-        assert_eq!(block.ancestors().len(), ancestors.len());
+        assert_eq!(block.ancestors().collect::<Vec<_>>().len(), ancestors.len());
         // This checks the invariant that block timestamp >= max ancestor timestamp.
         let mut max_timestamp_ms = BlockTimestampMs::MIN;
-        for (ancestor_ref, ancestor_block) in block.ancestors().iter().zip(ancestors.iter()) {
+        for (ancestor_ref, ancestor_block) in block.ancestors().zip(ancestors.iter()) {
             assert_eq!(ancestor_ref, &ancestor_block.reference());
             max_timestamp_ms = max_timestamp_ms.max(ancestor_block.timestamp_ms());
         }

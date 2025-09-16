@@ -550,7 +550,7 @@ impl DagState {
     /// block header is not found.
     pub(crate) fn get_block_headers(
         &self,
-        block_refs: &[BlockRef],
+        block_refs:impl Iterator<Item = &BlockRef>,
     ) -> Vec<Option<VerifiedBlockHeader>> {
         let mut block_headers: Vec<Option<VerifiedBlockHeader>> = vec![None; block_refs.len()];
         let mut missing_headers = Vec::new();

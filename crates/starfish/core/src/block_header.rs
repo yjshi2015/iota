@@ -7,7 +7,8 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use bytes::Bytes;
 use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
@@ -77,11 +78,19 @@ pub trait BlockHeaderAPI {
     fn round(&self) -> Round;
     fn author(&self) -> AuthorityIndex;
     fn slot(&self) -> Slot;
-    fn acknowledgments(&self) -> &[BlockRef];
+    fn acknowledgments(&self) -> impl Iterator<Item = &BlockRef>;
     fn timestamp_ms(&self) -> BlockTimestampMs;
-    fn ancestors(&self) -> &[BlockRef];
+    fn ancestors(&self) -> impl Iterator<Item = &BlockRef>;
     fn commit_votes(&self) -> &[CommitVote];
     fn transactions_commitment(&self) -> TransactionsCommitment;
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[repr(u8)]
+enum RefClass {
+    Ancestor,
+    Acknowledgment,
+    Both,
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -90,15 +99,13 @@ pub struct BlockHeaderV1 {
     round: Round,
     author: AuthorityIndex,
     timestamp_ms: BlockTimestampMs,
+    // references to blocks from previous rounds, some are ancestors, some are
+    // acknowledgments, some are both
     // ancestors are BlockRefs such that there are at least 2f+1 BlockRefs (by stake) from the
     // previous round
-    ancestors: Vec<BlockRef>,
     // acknowledgments are BlockRefs for blocks for which a validator acknowledges data
     // availability of transactions
-    // TODO: https://github.com/iotaledger/iota/issues/8151
-    // We should compress it together with ancestors to
-    // avoid duplications since in most cases these sets have a big overlap
-    acknowledgments: Vec<BlockRef>,
+    references: Vec<(BlockRef, RefClass)>,
     transactions_commitment: TransactionsCommitment,
     commit_votes: Vec<CommitVote>,
 }
@@ -114,13 +121,30 @@ impl BlockHeaderV1 {
         commit_votes: Vec<CommitVote>,
         transactions_commitment: TransactionsCommitment,
     ) -> BlockHeaderV1 {
+        let mut references = HashMap::new();
+        // insert all ancestors first
+        for ancestor in ancestors {
+            references.insert(ancestor, RefClass::Ancestor);
+        }
+        // then insert all acknowledgments, updating RefClass if necessary
+        for acknowledgment in acknowledgments {
+            match references.entry(acknowledgment) {
+                // block ref not present, insert as acknowledgment
+                Entry::Vacant(entry) => {
+                    entry.insert(RefClass::Acknowledgment);
+                },
+                // block ref already present as ancestor, update to Both
+                Entry::Occupied(mut entry) => {
+                    entry.insert(RefClass::Both);
+                }
+            }
+        }
         Self {
             epoch,
             round,
             author,
             timestamp_ms,
-            ancestors,
-            acknowledgments,
+            references: references.into_iter().collect(),
             transactions_commitment,
             commit_votes,
         }
@@ -132,8 +156,7 @@ impl BlockHeaderV1 {
             round: GENESIS_ROUND,
             author,
             timestamp_ms: 0,
-            ancestors: vec![],
-            acknowledgments: vec![],
+            references: vec![],
             commit_votes: vec![],
             transactions_commitment: TransactionsCommitment::default(),
         }
@@ -157,15 +180,25 @@ impl BlockHeaderAPI for BlockHeaderV1 {
         Slot::new(self.round, self.author)
     }
 
-    fn acknowledgments(&self) -> &[BlockRef] {
-        &self.acknowledgments
+    fn acknowledgments(&self) -> impl Iterator<Item = &BlockRef> {
+        self.references
+            .iter()
+            .filter_map(|(br, cls)| match cls {
+                RefClass::Acknowledgment | RefClass::Both => Some(br),
+                RefClass::Ancestor => None,
+            })
     }
 
     fn timestamp_ms(&self) -> BlockTimestampMs {
         self.timestamp_ms
     }
-    fn ancestors(&self) -> &[BlockRef] {
-        &self.ancestors
+    fn ancestors(&self) -> impl Iterator<Item = &BlockRef> {
+        self.references
+            .iter()
+            .filter_map(|(br, cls)| match cls {
+                RefClass::Ancestor | RefClass::Both => Some(br),
+                RefClass::Acknowledgment => None,
+            })
     }
 
     fn commit_votes(&self) -> &[CommitVote] {
@@ -202,7 +235,7 @@ impl BlockHeaderAPI for BlockHeader {
         }
     }
 
-    fn acknowledgments(&self) -> &[BlockRef] {
+    fn acknowledgments(&self) -> impl Iterator<Item = &BlockRef> {
         match self {
             BlockHeader::V1(header) => header.acknowledgments(),
         }
@@ -214,7 +247,7 @@ impl BlockHeaderAPI for BlockHeader {
         }
     }
 
-    fn ancestors(&self) -> &[BlockRef] {
+    fn ancestors(&self) -> impl Iterator<Item = &BlockRef> {
         match self {
             BlockHeader::V1(header) => header.ancestors(),
         }
@@ -714,8 +747,8 @@ impl fmt::Debug for VerifiedBlockHeader {
             "{:?}({}ms;{:?}r;{:?}a;{}c)",
             self.reference(),
             self.timestamp_ms(),
-            self.ancestors(),
-            self.acknowledgments(),
+            self.ancestors().collect::<Vec<_>>(),
+            self.acknowledgments().collect::<Vec<_>>(),
             self.commit_votes().len(),
         )
     }
@@ -972,7 +1005,20 @@ impl TestBlockHeader {
     }
 
     pub fn set_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
-        self.block_header.ancestors = ancestors;
+        let mut references = self.block_header.references.into_iter().collect::<HashMap<BlockRef,RefClass>>();
+        for ancestor in ancestors {
+            match references.entry(ancestor) {
+                // block ref not present, insert as Ancestor
+                Entry::Vacant(entry) => {
+                    entry.insert(RefClass::Ancestor);
+                },
+                // block ref already present as Acknowledgment, update to Both
+                Entry::Occupied(mut entry) => {
+                    entry.insert(RefClass::Both);
+                }
+            }
+        }
+        self.block_header.references = references.into_iter().collect();
         self
     }
 
@@ -982,7 +1028,20 @@ impl TestBlockHeader {
     }
 
     pub fn set_acknowledgments(mut self, acknowledgments: Vec<BlockRef>) -> Self {
-        self.block_header.acknowledgments = acknowledgments;
+        let mut references = self.block_header.references.into_iter().collect::<HashMap<BlockRef,RefClass>>();
+        for acknowledgment in acknowledgments {
+            match references.entry(acknowledgment) {
+                // block ref not present, insert as acknowledgment
+                Entry::Vacant(entry) => {
+                    entry.insert(RefClass::Acknowledgment);
+                },
+                // block ref already present as ancestor, update to Both
+                Entry::Occupied(mut entry) => {
+                    entry.insert(RefClass::Both);
+                }
+            }
+        }
+        self.block_header.references = references.into_iter().collect();
         self
     }
 
