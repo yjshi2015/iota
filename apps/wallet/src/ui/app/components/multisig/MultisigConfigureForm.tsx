@@ -28,7 +28,6 @@ import { Close } from '@iota/apps-ui-icons';
 import { UR } from '@keystonehq/keystone-sdk';
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
 import { Ed25519PublicKey } from '@iota/iota-sdk/keypairs/ed25519';
-import { toBase64 } from '@iota/iota-sdk/utils';
 
 const formSchema = z
     .object({
@@ -59,13 +58,14 @@ interface MultisigConfigFormProps {
 }
 
 export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFormProps) {
+    const ourPubKeyWithFlag = new Ed25519PublicKey(ourPubKey).toIotaPublicKey();
     const form = useZodForm({
         mode: 'all',
         reValidateMode: 'onChange',
         schema: formSchema,
         defaultValues: {
             threshold: 2,
-            pubKeys: [{ pubKey: ourPubKey, weight: 1 }],
+            pubKeys: [{ pubKey: ourPubKeyWithFlag, weight: 1 }],
         },
     });
 
@@ -109,7 +109,7 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
     }, [totalWeight, trigger]);
 
     const ourPubKeyUR = UR.from(
-        Buffer.from(toBase64(new Ed25519PublicKey(ourPubKey).toIotaBytes())),
+        Buffer.from(ourPubKeyWithFlag),
     );
 
     return (
@@ -146,20 +146,20 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
                             <div
                                 key={index}
                                 className={classNames('rounded-lg border border-gray-200 p-2', {
-                                    'border-green-200': pubKey.pubKey === ourPubKey,
+                                    'border-green-200': pubKey.pubKey === ourPubKeyWithFlag,
                                 })}
                             >
                                 <div className="mb-1 flex items-center justify-between">
                                     <h4
                                         className={classNames('font-medium text-gray-700', {
-                                            'text-green-500': pubKey.pubKey === ourPubKey,
+                                            'text-green-500': pubKey.pubKey === ourPubKeyWithFlag,
                                         })}
                                     >
-                                        {pubKey.pubKey === ourPubKey
+                                        {pubKey.pubKey === ourPubKeyWithFlag
                                             ? 'Your Public Key'
                                             : `Key #${index + 1}`}
                                     </h4>
-                                    {pubKey.pubKey === ourPubKey && (
+                                    {pubKey.pubKey === ourPubKeyWithFlag && (
                                         <Button
                                             size={ButtonSize.Small}
                                             type={ButtonType.Secondary}
@@ -167,7 +167,7 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
                                             text="Show QR"
                                         />
                                     )}
-                                    {pubKeys.length > 1 && pubKey.pubKey !== ourPubKey && (
+                                    {pubKeys.length > 1 && pubKey.pubKey !== ourPubKeyWithFlag && (
                                         <Button
                                             size={ButtonSize.Small}
                                             type={ButtonType.Destructive}
@@ -182,7 +182,7 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
                                         <Input
                                             type={InputType.Text}
                                             placeholder="Enter public key"
-                                            disabled={pubKey.pubKey === ourPubKey}
+                                            disabled={pubKey.pubKey === ourPubKeyWithFlag}
                                             {...register(`pubKeys.${index}.pubKey`)}
                                             errorMessage={errors.pubKeys?.[index]?.pubKey?.message}
                                         />

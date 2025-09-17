@@ -16,7 +16,7 @@ import { MnemonicAccountSource } from '../account-sources/mnemonicAccountSource'
 import { accountsEvents } from './events';
 import { getDB } from '../db';
 import { MultiSigPublicKey } from '@iota/iota-sdk/multisig/publickey';
-import { Ed25519PublicKey } from '@iota/iota-sdk/keypairs/ed25519';
+import { publicKeyFromIotaBytes } from '@iota/iota-sdk/verify';
 
 export interface PubKeyWeightPair {
     pubKey: string;
@@ -202,7 +202,7 @@ export class MnemonicMultisigAccount
         const multisigPublicKey = MultiSigPublicKey.fromPublicKeys({
             threshold: multisigConfig.threshold,
             publicKeys: multisigConfig.pubKeys.map((pubKeyWeightPair) => ({
-                publicKey: new Ed25519PublicKey(pubKeyWeightPair.pubKey),
+                publicKey: publicKeyFromIotaBytes(pubKeyWeightPair.pubKey),
                 weight: pubKeyWeightPair.weight,
             })),
         });

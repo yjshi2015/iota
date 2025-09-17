@@ -18,8 +18,8 @@ export const weightedPubKeyValidation = z
                 .trim()
                 .min(2, 'Public key is required.')
                 .regex(
-                    /^[A-Za-z0-9+/]{43}=$/,
-                    'Invalid public key, must be a 44-character base64 string ending with =.',
+                    /^[A-Za-z0-9+/]{44}$/,
+                    'Invalid public key, must be a 44-character base64 string.',
                 ),
             weight: z
                 .union([z.string(), z.number()])
