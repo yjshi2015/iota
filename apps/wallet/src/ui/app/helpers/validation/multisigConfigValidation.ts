@@ -4,8 +4,8 @@
 import { z } from 'zod';
 
 export const thresholdValidation = z
-    .string()
-    .transform((val) => parseInt(val) || 0)
+    .union([z.string(), z.number()])
+    .transform((val) => (typeof val === 'string' ? parseInt(val) || 0 : val))
     .pipe(
         z.number().min(1, 'Threshold must be at least 1.').max(10, 'Threshold cannot exceed 10.'),
     );
@@ -22,8 +22,8 @@ export const weightedPubKeyValidation = z
                     'Invalid public key, must be a 44-character base64 string ending with =.',
                 ),
             weight: z
-                .string()
-                .transform((val) => parseInt(val) || 0)
+                .union([z.string(), z.number()])
+                .transform((val) => (typeof val === 'string' ? parseInt(val) || 0 : val))
                 .pipe(
                     z
                         .number()

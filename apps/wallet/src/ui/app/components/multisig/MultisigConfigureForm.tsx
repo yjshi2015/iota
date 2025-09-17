@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useZodForm } from '@iota/core';
+import classNames from 'clsx';
 import { type SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -18,6 +19,8 @@ import {
     weightedPubKeyValidation,
     thresholdValidation,
 } from '../../helpers/validation/multisigConfigValidation';
+import { useEffect } from 'react';
+import { Close } from '@iota/apps-ui-icons';
 
 const formSchema = z
     .object({
@@ -49,7 +52,8 @@ interface MultisigConfigFormProps {
 
 export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFormProps) {
     const form = useZodForm({
-        mode: 'onChange',
+        mode: 'all',
+        reValidateMode: 'onChange',
         schema: formSchema,
         defaultValues: {
             threshold: 2,
@@ -62,22 +66,23 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
         formState: { isSubmitting, isValid, errors },
         watch,
         setValue,
+        trigger,
     } = form;
 
-    const pubKeys = watch('pubKeys') || [];
-    const threshold = watch('threshold');
+    const pubKeys = watch('pubKeys');
+    // const threshold = watch('threshold');
 
     const addPubKey = () => {
         if (pubKeys.length < 10) {
             const newPubKeys = [...pubKeys, { pubKey: '', weight: 1 }];
-            setValue('pubKeys', newPubKeys);
+            setValue('pubKeys', newPubKeys, { shouldValidate: true });
         }
     };
 
     const removePubKey = (index: number) => {
         if (pubKeys.length > 1) {
             const newPubKeys = pubKeys.filter((_, i) => i !== index);
-            setValue('pubKeys', newPubKeys);
+            setValue('pubKeys', newPubKeys, { shouldValidate: true });
         }
     };
 
@@ -90,53 +95,71 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
         return sum + weight;
     }, 0);
 
-    return (
-        <Form className="flex flex-col gap-1" form={form} onSubmit={handleFormSubmit}>
-            <Input
-                type={InputType.Text}
-                label="Threshold"
-                min="1"
-                max="10"
-                {...register('threshold')}
-                errorMessage={errors.threshold?.message}
-            />
+    useEffect(() => {
+        trigger('threshold');
+    }, [totalWeight, trigger]);
 
-            <div>
-                <div className="mb-2 flex items-center justify-between">
+    return (
+        <Form className="flex h-full flex-col" form={form} onSubmit={handleFormSubmit}>
+            <div className="flex-shrink-0">
+                <Input
+                    type={InputType.Text}
+                    label="Threshold"
+                    min="1"
+                    max="10"
+                    {...register('threshold')}
+                    errorMessage={errors.threshold?.message}
+                />
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col">
+                <div className="my-4 flex flex-shrink-0 items-center justify-between">
                     <label className="block text-sm font-medium text-gray-700">
-                        Public Keys ({pubKeys.length}/10)
                         <span className="ml-2 text-sm text-gray-500">
                             Total Weight: {totalWeight}
                         </span>
                     </label>
                     <Button
-                        text="Add Key"
+                        text="Add Public Key"
                         size={ButtonSize.Small}
                         onClick={addPubKey}
                         disabled={pubKeys.length >= 10}
                     />
                 </div>
 
-                <div className="space-y-2">
+                <div className="max-h-[390px] flex-1 space-y-2 overflow-y-auto pr-1">
                     {pubKeys.map((pubKey, index) => (
-                        <div key={index} className="rounded-lg border border-gray-200 p-2">
+                        <div
+                            key={index}
+                            className={classNames('rounded-lg border border-gray-200 p-2', {
+                                'border-green-200': pubKey.pubKey === ourPubKey,
+                            })}
+                        >
                             <div className="mb-1 flex items-center justify-between">
-                                <h4 className="font-medium text-gray-700">Key #{index + 1}</h4>
+                                <h4
+                                    className={classNames('font-medium text-gray-700', {
+                                        'text-green-500': pubKey.pubKey === ourPubKey,
+                                    })}
+                                >
+                                    {pubKey.pubKey === ourPubKey
+                                        ? 'Your Public Key'
+                                        : `Key #${index + 1}`}
+                                </h4>
                                 {pubKeys.length > 1 && pubKey.pubKey !== ourPubKey && (
                                     <Button
-                                        text="X"
+                                        size={ButtonSize.Small}
+                                        type={ButtonType.Destructive}
                                         onClick={() => removePubKey(index)}
-                                        disabled={false}
+                                        icon={<Close />}
                                     />
                                 )}
                             </div>
 
-                            <div className="md:grid-cols-3 grid grid-cols-1 gap-4">
+                            <div className="md:grid-cols-3 grid grid-cols-1 gap-2">
                                 <div className="md:col-span-2">
                                     <Input
                                         type={InputType.Text}
-                                        label="Public Key"
-                                        placeholder="0x..."
+                                        placeholder="Enter public key"
                                         disabled={pubKey.pubKey === ourPubKey}
                                         {...register(`pubKeys.${index}.pubKey`)}
                                         errorMessage={errors.pubKeys?.[index]?.pubKey?.message}
@@ -159,35 +182,14 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
                 </div>
             </div>
 
-            <div className="pt-4">
+            <div className="mt-4 flex-shrink-0 pt-4">
                 <Button
                     htmlType={ButtonHtmlType.Submit}
                     type={ButtonType.Primary}
                     disabled={isSubmitting || !isValid}
                     fullWidth={true}
-                    text={isSubmitting ? 'Submitting...' : 'Submit Configuration'}
+                    text={isSubmitting ? 'Submitting...' : 'Submit'}
                 />
-
-                {!isValid && (
-                    <p className="mt-2 text-sm text-amber-600">
-                        Please fix validation errors before submitting
-                    </p>
-                )}
-            </div>
-            <h3 className="mb-2 font-medium text-gray-700">Debug Info:</h3>
-            <div className="md:grid-cols-2 grid grid-cols-1 gap-4 text-sm">
-                <div>
-                    <strong>Form Valid:</strong> {isValid ? 'Yes' : 'No'}
-                </div>
-                <div>
-                    <strong>Threshold:</strong> {threshold}
-                </div>
-                <div>
-                    <strong>Total Weight:</strong> {totalWeight}
-                </div>
-                <div>
-                    <strong>Keys Count:</strong> {pubKeys.length}
-                </div>
             </div>
         </Form>
     );
