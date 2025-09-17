@@ -3,14 +3,18 @@
 
 import { Loading, Overlay } from '_components';
 import { useActiveAddress, useAppSelector, useUnlockedGuard } from '_hooks';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Checkmark } from '@iota/apps-ui-icons';
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
 import { UR } from '@keystonehq/keystone-sdk';
+import { Transaction } from '@iota/iota-sdk/transactions';
+import { useIotaClient } from '@iota/dapp-kit';
+import { type IotaTransactionBlockResponse } from '@iota/iota-sdk/client';
 
 export function MultisigSigningPage() {
     const network = useAppSelector(({ app }) => app.network);
+    const client = useIotaClient();
     const [searchParams] = useSearchParams();
     const [showModal, setShowModal] = useState(true);
     const activeAddress = useActiveAddress();
@@ -34,6 +38,29 @@ export function MultisigSigningPage() {
     if (!transaction || !signature || !network || !activeAddress) {
         return <Navigate to="/transactions" replace={true} />;
     }
+
+    const tx = Transaction.from(transaction);
+
+    useEffect(() => {
+        const abortController = new AbortController();
+        (async () => {
+            const digest = await tx.getDigest();
+            client
+                .waitForTransaction({
+                    signal: abortController.signal,
+                    digest,
+                    timeout: 10 * 60 * 1000, // 10 min
+                })
+                .then((response) => {
+                    const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+                        (response as IotaTransactionBlockResponse).digest,
+                    )}&from=transactions`;
+                    return navigate(receiptUrl);
+                });
+        })();
+
+        return () => abortController.abort();
+    }, [tx]);
 
     return (
         <Loading loading={isGuardLoading}>
