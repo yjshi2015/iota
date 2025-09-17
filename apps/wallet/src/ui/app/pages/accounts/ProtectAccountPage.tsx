@@ -99,7 +99,9 @@ export function ProtectAccountPage() {
                             createdAccounts[0].publicKey,
                         )}&sourceID=${encodeURIComponent(
                             createdAccounts[0].sourceID,
-                        )}&accountID=${encodeURIComponent(createdAccounts[0].id)}`,
+                        )}&accountID=${encodeURIComponent(
+                            createdAccounts[0].id,
+                        )}&isNew=${encodeURIComponent(type === AccountsFormType.NewMnemonicMultisig)}`,
                         {
                             replace: true,
                             state: {

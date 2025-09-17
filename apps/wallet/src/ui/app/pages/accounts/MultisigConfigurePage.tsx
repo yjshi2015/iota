@@ -13,6 +13,7 @@ export function MultisigConfigurePage() {
     const ourPubKey = searchParams.get('ourPubKey');
     const sourceID = searchParams.get('sourceID');
     const accountID = searchParams.get('accountID');
+    const isNew = searchParams.get('isNew') === 'true';
 
     const { data: allAccounts, isPending } = useAccounts();
     const account = allAccounts?.find(({ id }) => accountID === id) || null;
@@ -45,12 +46,16 @@ export function MultisigConfigurePage() {
             },
         });
 
-        navigate(`/accounts/backup/${sourceID}`, {
-            replace: true,
-            state: {
-                onboarding: true,
-            },
-        });
+        if (isNew) {
+            navigate(`/accounts/backup/${sourceID}`, {
+                replace: true,
+                state: {
+                    onboarding: true,
+                },
+            });
+        } else {
+            navigate('/');
+        }
     }
 
     return (

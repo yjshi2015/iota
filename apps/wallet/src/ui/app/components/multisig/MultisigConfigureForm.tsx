@@ -70,7 +70,6 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
     } = form;
 
     const pubKeys = watch('pubKeys');
-    // const threshold = watch('threshold');
 
     const addPubKey = () => {
         if (pubKeys.length < 10) {
