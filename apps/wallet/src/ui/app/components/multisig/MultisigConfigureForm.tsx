@@ -27,6 +27,8 @@ import { useEffect, useState } from 'react';
 import { Close } from '@iota/apps-ui-icons';
 import { UR } from '@keystonehq/keystone-sdk';
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
+import { Ed25519PublicKey } from '@iota/iota-sdk/keypairs/ed25519';
+import { toBase64 } from '@iota/iota-sdk/utils';
 
 const formSchema = z
     .object({
@@ -106,7 +108,9 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
         trigger('threshold');
     }, [totalWeight, trigger]);
 
-    const ourPubKeyUR = UR.from(Buffer.from(ourPubKey));
+    const ourPubKeyUR = UR.from(
+        Buffer.from(toBase64(new Ed25519PublicKey(ourPubKey).toIotaBytes())),
+    );
 
     return (
         <>
