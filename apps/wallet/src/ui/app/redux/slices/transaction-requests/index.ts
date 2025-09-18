@@ -29,22 +29,21 @@ export const respondToTransactionRequest = createAsyncThunk<
     {
         txRequestID: string;
         approved: boolean;
-        txResponse: IotaTransactionBlockResponse | null;
+        txResponse: IotaTransactionBlockResponse | SignedMessage | null;
+        isMultisigSigning?: boolean;
+        signedTransaction?: SignedTransaction;
     },
-    {
-        txRequestID: string;
-        approved: boolean;
-        signer: WalletSigner;
-    },
+    { txRequestID: string; approved: boolean; signer: WalletSigner; isMultisigSigning?: boolean },
     AppThunkConfig
 >(
     'respond-to-transaction-request',
-    async ({ txRequestID, approved, signer }, { extra: { background }, getState }) => {
+    async ({ txRequestID, approved, signer, isMultisigSigning }, { extra: { background }, getState }) => {
         const state = getState();
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
         if (!txRequest) {
             throw new Error(`TransactionRequest ${txRequestID} not found`);
         }
+
         let txSigned: SignedTransaction | undefined = undefined;
         let txResult: IotaTransactionBlockResponse | SignedMessage | undefined = undefined;
         let txResultError: string | undefined;
@@ -56,8 +55,8 @@ export const respondToTransactionRequest = createAsyncThunk<
                     });
                 } else if (txRequest.tx.type === 'transaction') {
                     const tx = Transaction.from(txRequest.tx.data);
-                    if (txRequest.tx.justSign) {
-                        // Just a signing request, do not submit
+                    if (txRequest.tx.justSign || isMultisigSigning) {
+                        // Just a signing request, do not submit (for justSign or multisig)
                         txSigned = await signer.signTransaction({
                             transaction: tx,
                         });
@@ -77,14 +76,28 @@ export const respondToTransactionRequest = createAsyncThunk<
                 txResultError = getSignerOperationErrorMessage(error);
             }
         }
-        background.sendTransactionRequestResponse(
+        // Send response to background
+        // For multisig transactions, do NOT send any response - the component will handle the complete flow
+        if (isMultisigSigning && approved && txSigned) {
+            // No response sent here - the TransactionRequest component will handle the complete flow
+        } else {
+            await background.sendTransactionRequestResponse(
+                txRequestID,
+                approved,
+                txResult,
+                txResultError,
+                undefined
+            );
+        }
+
+        const returnValue = {
             txRequestID,
-            approved,
-            txResult,
-            txResultError,
-            txSigned,
-        );
-        return { txRequestID, approved: approved, txResponse: null };
+            approved: approved,
+            txResponse: txResult || null,
+            isMultisigSigning,
+            signedTransaction: txSigned,
+        };
+        return returnValue;
     },
 );
 
