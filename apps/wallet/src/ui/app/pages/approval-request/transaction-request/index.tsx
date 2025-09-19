@@ -34,7 +34,6 @@ import { AnimatedQRCode } from '@keystonehq/animated-qr';
 import { UR } from '@keystonehq/keystone-sdk';
 import { useIotaClient } from '@iota/dapp-kit';
 import { useAppSelector } from '_hooks';
-import { type IotaTransactionBlockResponse } from '@iota/iota-sdk/client';
 
 export interface TransactionRequestProps {
     txRequest: TransactionApprovalRequest;
@@ -93,10 +92,10 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
     // If showing multisig QR code, render only the QR code interface
     if (showMultisigQR && signedTransaction) {
         return (
-            <div className="flex flex-col items-center p-6 bg-white min-h-screen">
+            <div className="flex min-h-screen flex-col items-center bg-white p-6">
                 <PageMainLayoutTitle title="Scan QR Code to Complete Transaction" />
-                <div className="flex flex-col items-center gap-4 mt-4">
-                    <div className="p-4 bg-white rounded-lg border">
+                <div className="mt-4 flex flex-col items-center gap-4">
+                    <div className="rounded-lg border bg-white p-4">
                         {(() => {
                             try {
                                 const qrData = JSON.stringify({
@@ -118,16 +117,19 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                                 );
                             } catch (qrError) {
                                 return (
-                                    <div className="w-64 h-64 flex items-center justify-center border">
-                                        <p className="text-sm text-gray-500">QR Code generation failed</p>
+                                    <div className="flex h-64 w-64 items-center justify-center border">
+                                        <p className="text-sm text-gray-500">
+                                            QR Code generation failed
+                                        </p>
                                     </div>
                                 );
                             }
                         })()}
                     </div>
                     <div className="text-center">
-                        <p className="text-sm text-gray-600 mb-2">
-                            Scan this QR code with your Keystone device to complete the multisig transaction
+                        <p className="mb-2 text-sm text-gray-600">
+                            Scan this QR code with your IOTA Aegis app to complete the multisig
+                            transaction
                         </p>
                         {transactionExecuted && (
                             <div className="flex items-center gap-2 text-green-600">
@@ -168,8 +170,14 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                                 }),
                             );
 
-                            if (result.payload && typeof result.payload === 'object' && 'signedTransaction' in result.payload && result.payload.signedTransaction) {
-                                const signedTx = result.payload.signedTransaction as SignedTransaction;
+                            if (
+                                result.payload &&
+                                typeof result.payload === 'object' &&
+                                'signedTransaction' in result.payload &&
+                                result.payload.signedTransaction
+                            ) {
+                                const signedTx = result.payload
+                                    .signedTransaction as SignedTransaction;
                                 setSignedTransaction(signedTx);
                                 setShowMultisigQR(true);
 
@@ -193,10 +201,11 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                                             setTransactionExecuted(true);
 
                                             // Get the full transaction details
-                                            const fullTransaction = await client.getTransactionBlock({
-                                                digest: response.digest,
-                                                options: txRequest.tx.options,
-                                            });
+                                            const fullTransaction =
+                                                await client.getTransactionBlock({
+                                                    digest: response.digest,
+                                                    options: txRequest.tx.options,
+                                                });
 
                                             // Send the final response to the dApp
                                             await backgroundClient.sendTransactionRequestResponse(
@@ -204,7 +213,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                                                 true, // approved
                                                 fullTransaction,
                                                 undefined, // no error
-                                                undefined // no signed transaction since it's executed
+                                                undefined, // no signed transaction since it's executed
                                             );
 
                                             const receiptUrl = `/receipt?txdigest=${encodeURIComponent(response.digest)}&from=transactions`;
@@ -217,7 +226,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                                                 false, // failed
                                                 undefined,
                                                 `Transaction execution failed: ${error.message}`,
-                                                undefined
+                                                undefined,
                                             );
                                         });
                                 } catch (digestError) {
@@ -231,7 +240,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                                 false, // failed
                                 undefined,
                                 `Multisig flow failed: ${error instanceof Error ? error.message : String(error)}`,
-                                undefined
+                                undefined,
                             );
                         }
                         return;
@@ -309,7 +318,14 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
                     );
 
                     // Handle navigation for multisig vs regular transactions
-                    if (isConfirmed && result.payload && typeof result.payload === 'object' && 'signedTransaction' in result.payload && result.payload.signedTransaction && isMultisigSigning) {
+                    if (
+                        isConfirmed &&
+                        result.payload &&
+                        typeof result.payload === 'object' &&
+                        'signedTransaction' in result.payload &&
+                        result.payload.signedTransaction &&
+                        isMultisigSigning
+                    ) {
                         const signedTx = result.payload.signedTransaction as SignedTransaction;
                         const multisigSigningUrl = `/multisig-signing?txbytes=${encodeURIComponent(
                             signedTx.bytes,

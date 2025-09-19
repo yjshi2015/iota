@@ -37,7 +37,10 @@ export const respondToTransactionRequest = createAsyncThunk<
     AppThunkConfig
 >(
     'respond-to-transaction-request',
-    async ({ txRequestID, approved, signer, isMultisigSigning }, { extra: { background }, getState }) => {
+    async (
+        { txRequestID, approved, signer, isMultisigSigning },
+        { extra: { background }, getState },
+    ) => {
         const state = getState();
         const txRequest = txRequestsSelectors.selectById(state, txRequestID);
         if (!txRequest) {
@@ -86,7 +89,7 @@ export const respondToTransactionRequest = createAsyncThunk<
                 approved,
                 txResult,
                 txResultError,
-                undefined
+                undefined,
             );
         }
 

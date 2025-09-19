@@ -10,7 +10,6 @@ import { AnimatedQRCode } from '@keystonehq/animated-qr';
 import { UR } from '@keystonehq/keystone-sdk';
 import { Transaction } from '@iota/iota-sdk/transactions';
 import { useIotaClient } from '@iota/dapp-kit';
-import { type IotaTransactionBlockResponse } from '@iota/iota-sdk/client';
 
 export function MultisigSigningPage() {
     const network = useAppSelector(({ app }) => app.network);
@@ -40,7 +39,7 @@ export function MultisigSigningPage() {
                 false, // rejected
                 undefined,
                 'User closed the signing interface',
-                undefined
+                undefined,
             );
         }
         fromParam ? navigate(`/${fromParam}`) : navigate(-1);
@@ -81,7 +80,7 @@ export function MultisigSigningPage() {
                             false, // not approved (due to error)
                             undefined,
                             error.message || 'Transaction failed',
-                            undefined
+                            undefined,
                         );
                     }
                     console.error('Transaction failed:', error);
@@ -97,7 +96,7 @@ export function MultisigSigningPage() {
                     false, // rejected
                     undefined,
                     'User aborted the signing process',
-                    undefined
+                    undefined,
                 );
             }
         };

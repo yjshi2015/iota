@@ -1,7 +1,7 @@
 // Copyright (c) 2025 IOTA Stiftung
 // SPDX-License-Identifier: Apache-2.0
 
-import { useZodForm } from '@iota/core';
+import { useZodForm, toast } from '@iota/core';
 import classNames from 'clsx';
 import { type SubmitHandler } from 'react-hook-form';
 import { z } from 'zod';
@@ -18,16 +18,21 @@ import {
     DialogContent,
     Header,
     DialogBody,
+    InfoBox,
+    InfoBoxStyle,
+    InfoBoxType,
 } from '@iota/apps-ui-kit';
 import {
     weightedPubKeyValidation,
     thresholdValidation,
 } from '../../helpers/validation/multisigConfigValidation';
 import { useEffect, useState } from 'react';
-import { Close } from '@iota/apps-ui-icons';
+import { Close, QrCode, Warning } from '@iota/apps-ui-icons';
 import { UR } from '@keystonehq/keystone-sdk';
-import { AnimatedQRCode } from '@keystonehq/animated-qr';
+import { AnimatedQRCode, AnimatedQRScanner } from '@keystonehq/animated-qr';
 import { Ed25519PublicKey } from '@iota/iota-sdk/keypairs/ed25519';
+import { publicKeyFromIotaBytes } from '@iota/iota-sdk/verify';
+import { useCheckCameraPermissionStatus } from '../../hooks';
 
 const formSchema = z
     .object({
@@ -70,6 +75,9 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
     });
 
     const [isPublicKeyQrModalOpen, setIsPublicKeyQrModalOpen] = useState(false);
+    const [isQrScannerModalOpen, setIsQrScannerModalOpen] = useState(false);
+    const [scanningForIndex, setScanningForIndex] = useState<number | null>(null);
+    const [cameraPermissionStatus] = useCheckCameraPermissionStatus();
 
     const {
         register,
@@ -99,6 +107,58 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
         onSubmit(data);
     };
 
+    const openQrScanner = (index: number) => {
+        setScanningForIndex(index);
+        setIsQrScannerModalOpen(true);
+    };
+
+    const onQrScanSuccess = (data: any) => {
+        try {
+            if (scanningForIndex !== null) {
+                let pubKeyBase64: string = '';
+
+                if (data.cbor) {
+                    // CBOR data is a hex string, convert it to bytes first
+                    const cborHex = data.cbor;
+                    const cborBytes = new Uint8Array(
+                        cborHex.match(/.{2}/g)!.map((byte: string) => parseInt(byte, 16)),
+                    );
+
+                    // Create a UR from the CBOR bytes and decode it
+                    const ur = new UR(Buffer.from(cborBytes), 'bytes');
+                    const decodedBuffer = ur.decodeCBOR();
+                    pubKeyBase64 = new TextDecoder().decode(decodedBuffer);
+                } else {
+                    throw new Error('Unsupported QR code format');
+                }
+
+                const otherPubKey = publicKeyFromIotaBytes(pubKeyBase64);
+                const iotaPublicKey = otherPubKey.toIotaPublicKey();
+
+                // Update the form value
+                setValue(`pubKeys.${scanningForIndex}.pubKey`, iotaPublicKey, {
+                    shouldValidate: true,
+                });
+
+                // Close modal and reset state
+                setIsQrScannerModalOpen(false);
+                setScanningForIndex(null);
+                toast.success('Public key scanned successfully!');
+            }
+        } catch (error) {
+            console.error('QR scan error:', error);
+            console.error('QR scan data:', data);
+            toast.error(
+                `Invalid public key QR code. Data: ${JSON.stringify(data)}. Error: ${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
+    };
+
+    const onQrScanError = (error: string) => {
+        console.error('QR scan error from scanner:', error);
+        toast.error(`QR scan error: ${error}`);
+    };
+
     const totalWeight = pubKeys.reduce((sum, pk) => {
         const weight = typeof pk.weight === 'string' ? parseInt(pk.weight) || 0 : pk.weight;
         return sum + weight;
@@ -108,9 +168,7 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
         trigger('threshold');
     }, [totalWeight, trigger]);
 
-    const ourPubKeyUR = UR.from(
-        Buffer.from(ourPubKeyWithFlag),
-    );
+    const ourPubKeyUR = UR.from(Buffer.from(ourPubKeyWithFlag));
 
     return (
         <>
@@ -177,7 +235,7 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
                                     )}
                                 </div>
 
-                                <div className="md:grid-cols-3 grid grid-cols-1 gap-2">
+                                <div className="md:grid-cols-4 grid grid-cols-1 gap-2">
                                     <div className="md:col-span-2">
                                         <Input
                                             type={InputType.Text}
@@ -198,6 +256,18 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
                                             errorMessage={errors.pubKeys?.[index]?.weight?.message}
                                         />
                                     </div>
+
+                                    {pubKey.pubKey !== ourPubKeyWithFlag && (
+                                        <div className="flex items-end">
+                                            <Button
+                                                size={ButtonSize.Small}
+                                                type={ButtonType.Secondary}
+                                                onClick={() => openQrScanner(index)}
+                                                icon={<QrCode />}
+                                                text="Scan QR"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -218,6 +288,13 @@ export function MultisigConfigureForm({ onSubmit, ourPubKey }: MultisigConfigFor
                 isOpen={isPublicKeyQrModalOpen}
                 setOpen={(open) => setIsPublicKeyQrModalOpen(open)}
                 pubKeyUR={ourPubKeyUR}
+            />
+            <QrScannerModal
+                isOpen={isQrScannerModalOpen}
+                setOpen={setIsQrScannerModalOpen}
+                onSuccess={onQrScanSuccess}
+                onError={onQrScanError}
+                cameraPermissionStatus={cameraPermissionStatus}
             />
         </>
     );
@@ -244,6 +321,65 @@ export function PublicKeyQrModal({ isOpen, setOpen, pubKeyUR }: PublicKeyQrModal
                         <span className="text-title-xs mt-4 text-iota-neutral-10 dark:text-iota-neutral-92">
                             Scan this QR to get the Public Key of this account
                         </span>
+                    </div>
+                </DialogBody>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+interface QrScannerModalProps {
+    isOpen: boolean;
+    setOpen: (isOpen: boolean) => void;
+    onSuccess: (data: any) => void;
+    onError: (error: string) => void;
+    cameraPermissionStatus: string | null;
+}
+
+export function QrScannerModal({
+    isOpen,
+    setOpen,
+    onSuccess,
+    onError,
+    cameraPermissionStatus,
+}: QrScannerModalProps) {
+    const canShowQrScanner = cameraPermissionStatus && cameraPermissionStatus !== 'denied';
+
+    return (
+        <Dialog open={isOpen} onOpenChange={setOpen}>
+            <DialogContent containerId="overlay-portal-container">
+                <Header title="Scan Public Key QR Code" onClose={() => setOpen(false)} />
+                <DialogBody>
+                    <div className="flex h-full flex-col items-center justify-center gap-xs">
+                        {canShowQrScanner ? (
+                            <>
+                                <div className="relative box-border flex h-[280px] w-[280px] items-center justify-center overflow-hidden rounded-lg">
+                                    <div className="flex-shrink-0">
+                                        <AnimatedQRScanner
+                                            handleScan={onSuccess}
+                                            handleError={onError}
+                                            options={{
+                                                blur: true,
+                                                width: '280px',
+                                                height: '280px',
+                                            }}
+                                            urTypes={['bytes']}
+                                        />
+                                    </div>
+                                </div>
+                                <span className="text-center text-body-sm text-iota-neutral-40 dark:text-iota-neutral-60">
+                                    Point your camera at a QR code containing a public key
+                                </span>
+                            </>
+                        ) : (
+                            <InfoBox
+                                title="Camera Access Blocked!"
+                                supportingText="Please allow camera access, then try again to proceed."
+                                style={InfoBoxStyle.Elevated}
+                                type={InfoBoxType.Error}
+                                icon={<Warning />}
+                            />
+                        )}
                     </div>
                 </DialogBody>
             </DialogContent>

@@ -35,8 +35,16 @@ export function ApprovalRequestPage() {
         // For multisig transactions that are approved, don't close the window - the navigation will handle the flow
         // For regular transactions or rejected transactions, close as normal
         // For multisig transactions that are approved, keep window open until transaction is executed
-        const shouldCloseWindow = !requestsLoading &&
-            (!request || (request && request.approved !== null && !(isMultisigSigning && request?.approved === true && isTransactionApprovalRequest(request))));
+        const shouldCloseWindow =
+            !requestsLoading &&
+            (!request ||
+                (request &&
+                    request.approved !== null &&
+                    !(
+                        isMultisigSigning &&
+                        request?.approved === true &&
+                        isTransactionApprovalRequest(request)
+                    )));
 
         if (shouldCloseWindow) {
             window.close();
