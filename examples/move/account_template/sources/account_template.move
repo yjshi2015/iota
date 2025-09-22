@@ -22,6 +22,12 @@ const ERestrictedDynamicField: vector<u8> =
 #[error(code = 2)]
 const EInternalRestrictedDynamicField: vector<u8> =
     b"Internal configuration changes can only modify the restricted dynamic fields.";
+#[error(code = 3)]
+const EAuthenticatorMustBeSet: vector<u8> = b"An Authenticate function must be set.";
+#[error(code = 3)]
+const EReservedDynamicFieldsMustBeSet: vector<u8> = b"Reserved dynamic fields must be set.";
+#[error(code = 4)]
+const EReservedDynamicFieldsCantBeEmpty: vector<u8> = b"Reserved dynamic fields can't be empty.";
 
 public struct ReservedDfNames has copy, drop, store {}
 
@@ -45,7 +51,23 @@ public struct IOTAccount has key {
 // --------------------------------------- Creation ---------------------------------------
 
 /// Create a shared IOTAccount.
+///
+/// A valid `IOTAccount` must have the dynamic fields set for the `authenticate` function and
+/// for the set of reserved dynamic fields.
+/// The reserved dynamic fields can't be empty either, because any possible authenticator must
+/// have auxiliary data attached to it, to be functional.
 public fun create_shared(uid: UID) {
+    assert!(
+        dynamic_field::exists_(&uid, iota::account::authenticator_df_name()),
+        EAuthenticatorMustBeSet,
+    );
+    assert!(dynamic_field::exists_(&uid, ReservedDfNames {}), EReservedDynamicFieldsMustBeSet);
+    let reserved_dynamic_fields: &vector<std::type_name::TypeName> = dynamic_field::borrow(
+        &uid,
+        ReservedDfNames {},
+    );
+    assert!(!reserved_dynamic_fields.is_empty(), EReservedDynamicFieldsCantBeEmpty);
+
     iota::transfer::share_object(IOTAccount { id: uid });
 }
 
@@ -78,8 +100,6 @@ public fun add_field<Name: copy + drop + store, Value: store>(
 ///
 /// Only the account itself can call this function and the dynamic field can't collide with any
 /// restricted ones.
-/// In case of violations: ETransactionSenderIsNotTheAccount, ERestrictedDynamicField will be
-/// emitted.
 public fun remove_field<Name: copy + drop + store, Value: store>(
     self: &mut IOTAccount,
     name: Name,
