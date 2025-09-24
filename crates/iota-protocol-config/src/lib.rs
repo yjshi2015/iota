@@ -1147,6 +1147,13 @@ pub struct ProtocolConfig {
     /// Default value set to 400. (5 x expected committee size (80)).
     /// Applicable only to `starfish` consensus.
     consensus_max_acknowledgments_per_block: Option<u32>,
+
+    /// Scorer version. When set to `None`, scores are not included in
+    /// EndOfEpoch messages. When set to `Some(version)`, scores are included in
+    /// the EndOfEpochV2 messages, where `version` determines the scoring
+    /// formulas to be used and whether rewards are adjusted based on the scores
+    /// or not.
+    scorer_version: Option<u16>,
 }
 
 // feature flags
@@ -1959,6 +1966,8 @@ impl ProtocolConfig {
             consensus_gc_depth: None,
 
             consensus_max_acknowledgments_per_block: None,
+
+            scorer_version: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
