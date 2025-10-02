@@ -405,7 +405,6 @@ impl CongestionTracker {
             clearing_txs_data,
         );
         self.update_congestion_info_cache(
-            time,
             congestion_info_map,
             congestion_txs_data.len() + clearing_txs_data.len(),
         );
@@ -586,7 +585,6 @@ impl CongestionTracker {
 
     fn update_congestion_info_cache(
         &self,
-        time: CheckpointTimestamp,
         congestion_info_map: CongestionInfoMap,
         number_transactions: usize,
     ) {
