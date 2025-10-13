@@ -19,7 +19,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-pub const MAX_PROTOCOL_VERSION: u64 = 13;
+pub const MAX_PROTOCOL_VERSION: u64 = 14;
 
 // Record history of protocol version allocations here:
 //
@@ -77,6 +77,7 @@ pub const MAX_PROTOCOL_VERSION: u64 = 13;
 //             of eligible active validators.
 //             Enable processing and tracking AuthorityCapabilitiesV1 from
 //             non-committee validators in the devnet.
+// Version 14: Dummy bump for testing only.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2226,6 +2227,9 @@ impl ProtocolConfig {
                         cfg.feature_flags
                             .select_committee_supporting_next_epoch_version = true;
                     }
+                }
+                14 => {
+                    // version 14 is a dummy one for now
                 }
                 // Use this template when making changes:
                 //
