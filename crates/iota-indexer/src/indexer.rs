@@ -103,35 +103,61 @@ impl Indexer {
             store.persist_protocol_configs_and_feature_flags(chain_id)?;
         }
 
-        let mut executor = IndexerExecutor::new(
-            ShimIndexerProgressStore::new(vec![
-                ("primary".to_string(), primary_watermark),
-                ("object_snapshot".to_string(), object_snapshot_watermark),
-            ]),
+        let primary_progress_store =
+            ShimIndexerProgressStore::new(vec![("primary".to_string(), primary_watermark)]);
+        let mut primary_executor = IndexerExecutor::new(
+            primary_progress_store,
             1,
             DataIngestionMetrics::new(&Registry::new()),
             cancel.child_token(),
         );
-        let worker = new_handlers(store, metrics, primary_watermark, cancel.clone()).await?;
-        let worker_pool = WorkerPool::new(
-            worker,
+        let primary_worker =
+            new_handlers(store, metrics, primary_watermark, cancel.clone()).await?;
+        let primary_worker_pool = WorkerPool::new(
+            primary_worker,
             "primary".to_string(),
             config.checkpoint_download_queue_size,
             Default::default(),
         );
+        primary_executor.register(primary_worker_pool).await?;
+        info!("Starting data ingestion executor...");
+        let mut primary_executor_handle = tokio::spawn(
+            primary_executor.run(
+                config
+                    .sources
+                    .data_ingestion_path
+                    .clone()
+                    .unwrap_or(tempfile::tempdir().unwrap().keep()),
+                config
+                    .sources
+                    .remote_store_url
+                    .as_ref()
+                    .map(|url| url.as_str().to_owned()),
+                vec![],
+                extra_reader_options.clone(),
+            ),
+        );
 
-        executor.register(worker_pool).await?;
-
-        let worker_pool = WorkerPool::new(
+        let snapshot_progress_store = ShimIndexerProgressStore::new(vec![(
+            "object_snapshot".to_string(),
+            object_snapshot_watermark,
+        )]);
+        let mut snapshot_executor = IndexerExecutor::new(
+            snapshot_progress_store,
+            1,
+            DataIngestionMetrics::new(&Registry::new()),
+            cancel.child_token(),
+        );
+        let snapshot_worker_pool = WorkerPool::new(
             object_snapshot_worker,
             "object_snapshot".to_string(),
             config.checkpoint_download_queue_size,
             Default::default(),
         );
-        executor.register(worker_pool).await?;
-        info!("Starting data ingestion executor...");
-        let mut executor_handle = tokio::spawn(
-            executor.run(
+        snapshot_executor.register(snapshot_worker_pool).await?;
+        info!("Starting snapshot executor...");
+        let mut snapshot_executor_handle = tokio::spawn(
+            snapshot_executor.run(
                 config
                     .sources
                     .data_ingestion_path
@@ -148,27 +174,59 @@ impl Indexer {
         );
 
         tokio::select! {
-            executor_result = &mut executor_handle => {
-                // Executor completed first - cancel snapshot task and check result
+            executor_result = &mut primary_executor_handle => {
+                // Primary executor completed first - cancel other tasks and check results
                 cancel.cancel();
-                let snapshot_result = tokio::time::timeout(
+                let snapshot_executor_result = tokio::time::timeout(
+                    SHUTDOWN_TIMEOUT,
+                    snapshot_executor_handle
+                ).await
+                .context("timeout waiting for snapshot executor to shutdown");
+                let snapshot_task_result = tokio::time::timeout(
                     SHUTDOWN_TIMEOUT,
                     object_snapshot_task_handle
                 ).await
                 .context("timeout waiting for snapshot task to shutdown");
-                executor_result.context("failed to join data ingestion executor")?.context("data ingestion executor failed")?;
-                snapshot_result?.context("failed to join snapshot task during shutdown")?.context("snapshot task failed during shutdown")?;
+
+                executor_result.context("failed to join primary executor")?.context("primary executor failed")?;
+                snapshot_executor_result?.context("failed to join snapshot executor during shutdown")?.context("snapshot executor failed during shutdown")?;
+                snapshot_task_result?.context("failed to join snapshot task during shutdown")?.context("snapshot task failed during shutdown")?;
             },
-            snapshot_result = &mut object_snapshot_task_handle => {
-                // Snapshot task completed first - cancel executor and check result
+            snapshot_executor_result = &mut snapshot_executor_handle => {
+                // Snapshot executor completed first - cancel other tasks and check results
                 cancel.cancel();
                 let executor_result = tokio::time::timeout(
                     SHUTDOWN_TIMEOUT,
-                    executor_handle
+                    primary_executor_handle
                 ).await
-                .context("timeout waiting for executor to shutdown");
-                snapshot_result.context("failed to join snapshot task")?.context("snapshot task failed")?;
-                executor_result?.context("failed to join data ingestion executor during shutdown")?.context("data ingestion executor failed during shutdown")?;
+                .context("timeout waiting for primary executor to shutdown");
+                let snapshot_task_result = tokio::time::timeout(
+                    SHUTDOWN_TIMEOUT,
+                    object_snapshot_task_handle
+                ).await
+                .context("timeout waiting for snapshot task to shutdown");
+
+                snapshot_executor_result.context("failed to join snapshot executor")?.context("snapshot executor failed")?;
+                executor_result?.context("failed to join primary executor during shutdown")?.context("primary executor failed during shutdown")?;
+                snapshot_task_result?.context("failed to join snapshot task during shutdown")?.context("snapshot task failed during shutdown")?;
+            },
+            snapshot_task_result = &mut object_snapshot_task_handle => {
+                // Snapshot task completed first - cancel other tasks and check results
+                cancel.cancel();
+                let executor_result = tokio::time::timeout(
+                    SHUTDOWN_TIMEOUT,
+                    primary_executor_handle
+                ).await
+                .context("timeout waiting for primary executor to shutdown");
+                let snapshot_executor_result = tokio::time::timeout(
+                    SHUTDOWN_TIMEOUT,
+                    snapshot_executor_handle
+                ).await
+                .context("timeout waiting for snapshot executor to shutdown");
+
+                snapshot_task_result.context("failed to join snapshot task")?.context("snapshot task failed")?;
+                executor_result?.context("failed to join primary executor during shutdown")?.context("primary executor failed during shutdown")?;
+                snapshot_executor_result?.context("failed to join snapshot executor during shutdown")?.context("snapshot executor failed during shutdown")?;
             }
         };
 
