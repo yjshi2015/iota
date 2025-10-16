@@ -3,8 +3,6 @@
 
 module authenticate::template;
 
-use iota::auth_context::AuthContext;
-
 public struct Object has key, store {
     id: iota::object::UID,
 }
@@ -17,11 +15,7 @@ public struct NonObjectTemplated<T: copy + drop + store> has copy, drop, store {
 }
 
 // PASS
-public fun primitive<T: copy + drop + store>(
-    _arg: T,
-    _auth_ctx: &AuthContext,
-    _ctx: &TxContext,
-) {}
+public fun primitive<T: copy + drop + store>(_arg: T, _auth_ctx: &AuthContext, _ctx: &TxContext) {}
 
 // PASS
 public fun templated_non_object_immutable_ref<T: copy + drop + store>(
@@ -47,27 +41,15 @@ public fun templated_non_object_by_value<T: copy + drop + store>(
 // Template and object
 
 // PASS
-public fun object_immutable_ref<T: key>(
-    _object: &T,
-    _auth_ctx: &AuthContext,
-    _ctx: &TxContext,
-) {}
+public fun object_immutable_ref<T: key>(_object: &T, _auth_ctx: &AuthContext, _ctx: &TxContext) {}
 
 // FAIL
-public fun object_by_value<T: key + store>(
-    object: T,
-    _auth_ctx: &AuthContext,
-    _ctx: &TxContext,
-) {
+public fun object_by_value<T: key + store>(object: T, _auth_ctx: &AuthContext, _ctx: &TxContext) {
     transfer::public_share_object(object);
 }
 
 // FAIL
-public fun object_mutable_ref<T: key>(
-    _object: &mut T,
-    _auth_ctx: &AuthContext,
-    _ctx: &TxContext,
-) {}
+public fun object_mutable_ref<T: key>(_object: &mut T, _auth_ctx: &AuthContext, _ctx: &TxContext) {}
 
 #[allow(unused_field)]
 public struct ObjectTemplated<T: key + store> has copy, drop, store {

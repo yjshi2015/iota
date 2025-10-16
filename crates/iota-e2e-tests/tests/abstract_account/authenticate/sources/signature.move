@@ -3,8 +3,6 @@
 
 module authenticate::signature;
 
-use iota::auth_context::AuthContext;
-
 // PASS
 public fun minimally_viable_auth_function(_auth_ctx: &AuthContext, _ctx: &TxContext) {}
 

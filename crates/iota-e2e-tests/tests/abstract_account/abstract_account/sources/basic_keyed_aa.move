@@ -5,7 +5,6 @@ module abstract_account::basic_keyed_aa;
 
 use abstract_account::abstract_account::{Self, AbstractAccount, ensure_tx_sender_is_account};
 use iota::account::AuthenticatorInfoV1;
-use iota::auth_context::AuthContext;
 use iota::ecdsa_k1;
 use iota::ecdsa_r1;
 use iota::ed25519;

@@ -5,7 +5,6 @@
 module iotaccount::keyed_iotaccount_tests;
 
 use iota::account;
-use iota::auth_context::{Self, AuthContext};
 use iota::ecdsa_k1;
 use iota::hex;
 use iota::test_scenario::{Self, Scenario};

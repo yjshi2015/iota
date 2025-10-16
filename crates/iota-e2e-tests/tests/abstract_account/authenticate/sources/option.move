@@ -3,8 +3,6 @@
 
 module authenticate::option;
 
-use iota::auth_context::AuthContext;
-
 public struct Object has key, store {
     id: iota::object::UID,
 }
