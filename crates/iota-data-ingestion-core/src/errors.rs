@@ -25,6 +25,9 @@ pub enum IngestionError {
     #[error(transparent)]
     RestApi(#[from] iota_rest_api::client::sdk::Error),
 
+    #[error("grpc error: `{0}`")]
+    Grpc(String),
+
     #[error("Register at least one worker pool")]
     EmptyWorkerPool,
 
@@ -60,4 +63,10 @@ pub enum IngestionError {
 
     #[error("Checkpoint not available yet")]
     CheckpointNotAvailableYet,
+}
+
+impl From<tonic::Status> for IngestionError {
+    fn from(value: tonic::Status) -> Self {
+        Self::Grpc(value.to_string())
+    }
 }
