@@ -133,7 +133,6 @@ kill_spammer_processes() {
     # kill common spammer process forms
     pkill -9 -f 'iota-spammer spammer spam' 2>/dev/null || true
     pkill -9 -f 'cargo run --release -- spammer spam' 2>/dev/null || true
-    pkill -9 -f 'cargo run --release -- spammer spam' 2>/dev/null || true
     pkill -9 -f 'cargo run --release --.* stress' 2>/dev/null || true
     pkill -9 -f 'spamming_fuzz_test.sh' 2>/dev/null || true
     pkill -9 -f 'network-fuzz-disruption.sh' 2>/dev/null || true
@@ -181,7 +180,7 @@ NETWORK_METRIC=$DEFAULT_NETWORK_METRIC
 SPAMMER_ENABLE=$DEFAULT_SPAMMER_ENABLE
 SPAMMER_TPS=$DEFAULT_SPAMMER_TPS
 SPAMMER_SIZE_PER_TX=$DEFAULT_SPAMMER_SIZE
-SPAMMER_TYPE=$DEFAULT_SPAMMER_SIZE
+SPAMMER_TYPE=$DEFAULT_SPAMMER_TYPE
 
 # --- Parse command-line arguments ---
 while getopts ":n:p:b:g:s:x:l:t:r:mS:T:Z:C:h" opt; do
