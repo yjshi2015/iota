@@ -11,7 +11,6 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-
 # --- Default configuration ---
 NUMBER_VALIDATORS=4       # Number of validator containers
 SEED=${SEED:-42}       # Seed for reproducibility of pseudorandom disruptions
@@ -19,8 +18,13 @@ PERCENT_BLOCK=0           # Percent chance to block a connection
 PERCENT_LOSS=0           # Percent chance to apply packet loss
 PERCENT_RESTART=0         # Percent of validators to stop and start after RESTART_DURATION seconds
 RESTART_DURATION=120    # Seconds to stop validators during restart
-GEODISTRIBUTED=false  # Large geodistributed latencies or small ones
+GEODISTRIBUTED="false"  # Topology: false=low latency, true=geo latency, or specific topology name
 LOG_FILE="logs/fuzz_script.log" # Output file for script
+
+# --- Logging helper --- (moved up before first use)
+log() {
+    echo "$(date -Iseconds) $1" >> "$LOG_FILE"
+}
 
 # --- Command-line arguments ---
 while getopts "g:n:s:b:l:r:o:" opt; do
@@ -32,18 +36,40 @@ while getopts "g:n:s:b:l:r:o:" opt; do
     l) PERCENT_LOSS="$OPTARG" ;;
     r) PERCENT_RESTART="$OPTARG" ;;
     o) LOG_FILE="$OPTARG" ;;
-    *) echo "Usage: $0 [-n num_validators] [-s seed] [-b percent_block] [-l percent_packet_loss] [-r percent_restart] [-g geodistributed_bool]"; exit 1 ;;
+    *) echo "Usage: $0 [-n num_validators] [-s seed] [-b percent_block] [-l percent_packet_loss] [-r percent_restart] [-g topology]"; exit 1 ;;
   esac
 done
 shift $((OPTIND-1))
 
+# --- Extended topology support with backward compatibility ---
+# GEODISTRIBUTED now accepts: true/false (legacy) or specific topology names
+TOPOLOGY=""
+LATENCY_DIVISOR=1
 
+if [[ "$GEODISTRIBUTED" == "true" ]]; then
+  TOPOLOGY="geo-high"
+  LATENCY_DIVISOR=2
+  log "Using geo-distributed latency topology (high latencies)"
+elif [[ "$GEODISTRIBUTED" == "false" ]]; then
+  TOPOLOGY="geo-low"
+  LATENCY_DIVISOR=8
+  log "Using geo-distributed latency topology with reduced values (low latencies)"
+else
+  # New mode: explicit topology specification
+  TOPOLOGY="$GEODISTRIBUTED"
 
-# --- Logging helper ---
-log() {
-    echo "$(date -Iseconds) $1" >> "$LOG_FILE"
-}
-
+  # Validate topology
+  case "$TOPOLOGY" in
+    "ring"|"star"|"non-triangle")
+      # Valid topology
+      ;;
+    *)
+      echo "Error: Invalid topology '$TOPOLOGY'. Valid options: ring, star, non-triangle"
+      echo "       Or use true/false for legacy geo-distributed mode"
+      exit 1
+      ;;
+  esac
+fi
 
 # --- Prepare validator list ---
 validators=()
@@ -51,8 +77,9 @@ for i in $(seq 1 "$NUMBER_VALIDATORS"); do
   validators+=(validator-"$i")
 done
 
+# === RTT latency tables for different topologies ===
 
-# === RTT latency table ===
+# Original geo-distributed latency table
 RTT_LATENCY_TABLE=(
   "1 14 104 112 198 65 68 110 201 146"
   "14 1 106 122 196 78 67 103 189 142"
@@ -66,10 +93,80 @@ RTT_LATENCY_TABLE=(
   "146 142 238 254 101 108 199 245 140 1"
 )
 
+# Ring topology with increasing latencies
+RING_RTT_LATENCY_TABLE=(
+  "0 15 30 60 120 240 120 60 30 15"
+  "15 0 15 30 60 120 240 120 60 30"
+  "30 15 0 15 30 60 120 240 120 60"
+  "60 30 15 0 15 30 60 120 240 120"
+  "120 60 30 15 0 15 30 60 120 240"
+  "240 120 60 30 15 0 15 30 60 120"
+  "120 240 120 60 30 15 0 15 30 60"
+  "60 120 240 120 60 30 15 0 15 30"
+  "30 60 120 240 120 60 30 15 0 15"
+  "15 30 60 120 240 120 60 30 15 0"
+)
+
+# Star topology with node 0 as hub
+STAR_RTT_LATENCY_TABLE=(
+  "0 25 25 25 25 25 25 25 25 25"
+  "25 0 200 200 200 200 200 200 200 200"
+  "25 200 0 200 200 200 200 200 200 200"
+  "25 200 200 0 200 200 200 200 200 200"
+  "25 200 200 200 0 200 200 200 200 200"
+  "25 200 200 200 200 0 200 200 200 200"
+  "25 200 200 200 200 200 0 200 200 200"
+  "25 200 200 200 200 200 200 0 200 200"
+  "25 200 200 200 200 200 200 200 0 200"
+  "25 200 200 200 200 200 200 200 200 0"
+)
+
+# Non-triangle topology with severe triangle inequality violations
+NON_TRIANGLE_RTT_LATENCY_TABLE=(
+  "0 500 20 25 450 30 470 35 460 40"
+  "500 0 25 460 30 450 35 440 40 430"
+  "20 25 0 510 30 490 35 480 40 470"
+  "25 460 510 0 20 480 25 470 30 460"
+  "450 30 30 20 0 520 25 510 30 500"
+  "30 450 490 480 520 0 20 490 25 480"
+  "470 35 35 25 25 20 0 530 20 520"
+  "35 440 480 470 510 490 530 0 15 510"
+  "460 40 40 30 30 25 20 15 0 540"
+  "40 430 470 460 500 480 520 510 540 0"
+)
+
+# Select the active RTT latency table based on topology
+case "$TOPOLOGY" in
+  "geo-high"|"geo-low")
+    # Use the original RTT_LATENCY_TABLE with different divisors
+    # LATENCY_DIVISOR already set in the if/else block above
+    log "Using geo-distributed latency topology (divisor=$LATENCY_DIVISOR)"
+    ;;
+  "ring")
+    RTT_LATENCY_TABLE=("${RING_RTT_LATENCY_TABLE[@]}")
+    LATENCY_DIVISOR=1  # Use exact values for ring
+    log "Using ring latency topology with exponential distances"
+    ;;
+  "star")
+    RTT_LATENCY_TABLE=("${STAR_RTT_LATENCY_TABLE[@]}")
+    LATENCY_DIVISOR=1  # Use exact values for star
+    log "Using star latency topology with node 0 as hub"
+    ;;
+  "non-triangle")
+    RTT_LATENCY_TABLE=("${NON_TRIANGLE_RTT_LATENCY_TABLE[@]}")
+    LATENCY_DIVISOR=1  # Use exact values for non-triangle
+    log "Using non-triangle latency topology with extreme violations"
+    ;;
+  *)
+    echo "Error: Unknown topology '$TOPOLOGY'"
+    exit 1
+    ;;
+esac
+
 # === Subfunctions ===
 
 # latency_from_table(i, j)
-# Returns RTT between validator i and j from RTT table, scaled by GEODISTRIBUTED.
+# Returns RTT between validator i and j from RTT table
 latency_from_table() {
   local i=$1 j=$2
   local size=${#RTT_LATENCY_TABLE[@]}
@@ -78,18 +175,7 @@ latency_from_table() {
   IFS=' ' read -r -a row <<< "${RTT_LATENCY_TABLE[$idx_i]}"
   local val=${row[$idx_j]}
 
-  local divisor
-  if [ "$GEODISTRIBUTED" = true ]; then
-    divisor=2
-  else
-    divisor=8
-  fi
-
-  local res=$(( val / divisor ))
-  if [ "$res" -gt "$val" ]; then
-    res=$MAX
-  fi
-
+  local res=$(( val / LATENCY_DIVISOR ))
   echo "$res"
 }
 
@@ -230,6 +316,8 @@ restart_loop() {
 
 initially_apply_latency() {
   # --- Apply latencies for all pairs ---
+  log "Applying $TOPOLOGY topology latencies..."
+
   for ((i=0; i<${#validators[@]}; i++)); do
     for ((j=i+1; j<${#validators[@]}; j++)); do
       A=${validators[i]} B=${validators[j]}
@@ -314,7 +402,7 @@ reapply_latencies_and_fuzz_loop() {
 }
 
 # === Main ===
-log "Starting fuzz manager"
+log "Starting fuzz manager with $TOPOLOGY topology"
 RANDOM=$SEED
 
 # Initially set latencies
@@ -328,6 +416,5 @@ reapply_latencies_and_fuzz_loop &
 
 # Restart validator loop
 restart_loop &
-
 
 wait

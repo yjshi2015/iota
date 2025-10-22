@@ -14,7 +14,7 @@ CLEANING=false
 DEFAULT_NUM_VALIDATORS=4
 DEFAULT_PROTOCOL="mysticeti"
 DEFAULT_BUILD=true
-DEFAULT_GEODISTRIBUTED=false
+DEFAULT_GEODISTRIBUTED="false"
 DEFAULT_SEED=42
 DEFAULT_PERCENT_BLOCK=0       # percent chance to block a connection
 DEFAULT_PERCENT_LOSS=0       # percent chance to apply netem loss
@@ -226,7 +226,7 @@ log "Spammer enabled            : $SPAMMER_ENABLE"
 if [ "$SPAMMER_ENABLE" = true ]; then
   log "Spammer type               : $SPAMMER_TYPE"
   log "Spammer TPS                : $SPAMMER_TPS"
-  if [ "$SPAMMER_TYPE" = "iota-spammer"]; then
+  if [ "$SPAMMER_TYPE" = "iota-spammer" ]; then
     log "Spammer size per tx        : $SPAMMER_SIZE_PER_TX"
   fi
 fi
