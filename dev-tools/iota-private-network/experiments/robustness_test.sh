@@ -1,5 +1,4 @@
 #!/bin/bash
-# robust_network_test.sh - Systematic robustness testing with Prometheus metrics
 
 set -euo pipefail
 
@@ -8,229 +7,352 @@ RESULTS_DIR="$SCRIPT_DIR/robustness_results"
 mkdir -p "$RESULTS_DIR"
 
 PROMETHEUS_URL="http://localhost:9090"
+TEST_DURATION=1800
+BURN_IN_SECONDS=180
+COOL_DOWN_SECONDS=180
+SAMPLE_INTERVAL=10
 
-# Default test duration in seconds (can be overridden with -d)
-d=1800
+SEED=42
 
-# Log function with timestamps
 log() {
-  echo "[$(date -Iseconds)] $1" | tee -a "$RESULTS_DIR/robustness_test.log"
+    echo "[$(date -Iseconds)] $1" | tee -a "$RESULTS_DIR/live_robustness.log"
 }
 
-# Get metric from Prometheus with error handling
-get_prometheus_metric() {
-  local query="$1"
-  local default_value="$2"
+# === METRICS FUNCTIONS ===
 
-  result=$(curl -s "$PROMETHEUS_URL/api/v1/query?query=$query" | \
-           jq -r '.data.result[0].value[1] // "'"$default_value"'"' 2>/dev/null || echo "$default_value")
-  echo "$result"
+get_tps() {
+    local duration_minutes="${1:-1}"
+    curl -s "$PROMETHEUS_URL/api/v1/query?query=rate(total_transaction_certificates[${duration_minutes}m])" | \
+        jq -r '.data.result[0].value[1] // "0"'
 }
 
-# Calculate TPS using Prometheus rate function
-calculate_tps() {
-  local duration_minutes="$1"
-
-  # Use rate() to get transactions per second over the specified duration
-  tps=$(get_prometheus_metric "rate(total_transaction_certificates[${duration_minutes}m])" "0")
-  echo "$tps"
+get_bps() {
+    curl -s "$PROMETHEUS_URL/api/v1/query?query=avg(irate(consensus_committed_messages[2m]))" | \
+        jq -r '.data.result[0].value[1] // "0"'
 }
 
-# Get validator availability percentage
-get_validator_availability() {
-  local expected_validators="$1"
 
-  available_count=$(curl -s "$PROMETHEUS_URL/api/v1/query?query=count(up{job=~\"Validator.*\"}==1)" | \
-                    jq -r '.data.result[0].value[1] // "0"')
-
-  if [[ "$available_count" != "0" ]]; then
-    availability=$(echo "scale=4; $available_count * 100 / $expected_validators" | bc -l)
-    echo "$availability"
-  else
-    echo "0"
-  fi
+get_block_latency_median() {
+    curl -s "$PROMETHEUS_URL/api/v1/query?query=histogram_quantile(0.5,consensus_block_commit_latency_bucket)" | \
+        jq -r '.data.result[0].value[1] // "0"'
 }
 
-# Count WARN and ERROR messages from validator logs
-count_log_issues() {
-  local warn_count=0
-  local error_count=0
+get_block_latency_p99() {
+    curl -s "$PROMETHEUS_URL/api/v1/query?query=histogram_quantile(0.99,consensus_block_commit_latency_bucket)" | \
+        jq -r '.data.result[0].value[1] // "0"'
+}
 
-  # Check the logs that are actually created by run-all.sh
-  for log_file in "$SCRIPT_DIR/logs"/exp-validator-*-latest.log; do
-    if [[ -f "$log_file" ]]; then
-      validator_name=$(basename "$log_file" .log | sed 's/exp-//')
+get_active_validators() {
+    curl -s "$PROMETHEUS_URL/api/v1/query?query=consensus_committed_messages" | \
+        jq -r '.data.result[].metric.instance' | sort -u | wc -l
+}
 
-      # Count WARN messages
-      warn=$(grep -c "WARN" "$log_file" 2>/dev/null || echo "0")
-      warn_count=$((warn_count + warn))
+# Get current log counts (live during experiment)
+get_current_log_counts() {
+    local warn_count=0
+    local error_count=0
 
-      # Count ERROR messages
-      error=$(grep -c "ERROR" "$log_file" 2>/dev/null || echo "0")
-      error_count=$((error_count + error))
-
-      log "  $validator_name: WARN=$warn, ERROR=$error"
+    if [ -d "logs" ]; then
+        warn_count=$(grep -h "WARN" logs/exp-validator-*-latest.log 2>/dev/null | wc -l || echo "0")
+        error_count=$(grep -h "ERROR" logs/exp-validator-*-latest.log 2>/dev/null | wc -l || echo "0")
     fi
-  done
 
-  # Return total counts (WARN:ERROR format)
-  echo "$warn_count:$error_count"
+    echo "$warn_count:$error_count"
 }
 
-log "==== IOTA Network Robustness Test ===="
-log "Starting test run at $(date)"
+# Collect single metrics sample
+collect_sample() {
+    local timestamp="$1"
+    local tps=$(get_tps 1)
+    local bps=$(get_bps)
+    local block_lat_med=$(get_block_latency_median)
+    local block_lat_p99=$(get_block_latency_p99)
+    local active_val=$(get_active_validators)
 
-# Parse optional duration flag (-d <seconds>)
-while getopts ":d:" opt; do
-  case $opt in
-    d) d="$OPTARG" ;;
-    \?) echo "Usage: $0 [-d duration_seconds]"; exit 1 ;;
-  esac
-done
-shift $((OPTIND - 1))
+    # Get current log counts
+    local log_counts=$(get_current_log_counts)
+    local warn_count=$(echo "$log_counts" | cut -d':' -f1)
+    local error_count=$(echo "$log_counts" | cut -d':' -f2)
 
-# Define the four challenging scenarios with 70% minimum uptime constraint
+    echo "$timestamp,$tps,$bps,$block_lat_med,$block_lat_p99,$active_val,$warn_count,$error_count"
+}
+
+# Monitor experiment and collect metrics during execution
+monitor_experiment() {
+    local scenario_name="$1"
+    local scenario_dir="$2"
+    local run_all_pid="$3"
+
+    local metrics_file="$scenario_dir/live_metrics.csv"
+    echo "timestamp,tps,bps,block_latency_median,block_latency_p99,active_validators,warn_count,error_count" > "$metrics_file"
+
+    log "Starting live metrics collection for $scenario_name"
+
+    # Wait for burn-in period
+    log "Burn-in period: waiting $BURN_IN_SECONDS seconds..."
+    sleep "$BURN_IN_SECONDS"
+
+    # Calculate monitoring period
+    local monitoring_duration=$((TEST_DURATION - BURN_IN_SECONDS - COOL_DOWN_SECONDS))
+    local end_time=$(($(date +%s) + monitoring_duration))
+    local sample_count=0
+
+    log "Monitoring for $monitoring_duration seconds (sampling every $SAMPLE_INTERVAL seconds)"
+
+    # Collect metrics during stable period
+    while [[ $(date +%s) -lt $end_time ]] && kill -0 "$run_all_pid" 2>/dev/null; do
+        timestamp=$(date -Iseconds)
+        sample=$(collect_sample "$timestamp")
+        echo "$sample" >> "$metrics_file"
+
+        # Parse for live display
+        IFS=',' read -r ts tps bps block_med block_p99 active warn_count error_count <<< "$sample"
+        log "Sample $((++sample_count)): TPS=$tps, BPS=$bps, Block_lat=${block_med}ms, Active=$active, WARN=$warn_count, ERROR=$error_count"
+
+        sleep "$SAMPLE_INTERVAL"
+    done
+
+    log "Live metrics collection completed. Collected $sample_count samples."
+
+    # Wait for run-all.sh to complete if still running
+    if kill -0 "$run_all_pid" 2>/dev/null; then
+        log "Waiting for run-all.sh to complete..."
+        wait "$run_all_pid"
+    fi
+}
+
+# Calculate statistics from collected samples with proper labels
+calculate_statistics() {
+    local metrics_file="$1"
+    local stats_file="$2"
+    local scenario_dir="$3"
+
+    if [[ ! -f "$metrics_file" ]]; then
+        log "ERROR: Metrics file $metrics_file not found"
+        return 1
+    fi
+
+    # Check if we have data (more than just header)
+    local sample_count=$(tail -n +2 "$metrics_file" | wc -l)
+    if [[ "$sample_count" -eq 0 ]]; then
+        log "WARNING: No metrics samples collected"
+        echo "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0" > "$stats_file"
+        return 0
+    fi
+
+    log "Calculating statistics from $sample_count samples"
+
+    # Create detailed statistics report
+    {
+        echo "=== STATISTICS REPORT ==="
+        echo "Samples collected: $sample_count"
+        echo "Sampling interval: $SAMPLE_INTERVAL seconds"
+        echo "Monitoring duration: $((sample_count * SAMPLE_INTERVAL)) seconds"
+        echo ""
+    } > "$scenario_dir/statistics_report.txt"
+
+    # Use awk to calculate statistics for each metric column
+    awk -F',' -v report_file="$scenario_dir/statistics_report.txt" '
+    NR == 1 { next }  # Skip header
+    NR == 2 {
+        # Initialize arrays for first data row
+        for(i=2; i<=8; i++) {
+            sum[i] = $i
+            min[i] = $i
+            max[i] = $i
+            values[i][1] = $i
+            count[i] = 1
+        }
+        next
+    }
+    {
+        # Process subsequent rows
+        for(i=2; i<=8; i++) {
+            if($i != "" && $i != "null") {
+                sum[i] += $i
+                if($i < min[i]) min[i] = $i
+                if($i > max[i]) max[i] = $i
+                values[i][++count[i]] = $i
+            }
+        }
+    }
+    END {
+        # Calculate means
+        for(i=2; i<=8; i++) {
+            mean[i] = (count[i] > 0) ? sum[i]/count[i] : 0
+        }
+
+        # Calculate medians (simple approximation)
+        for(i=2; i<=8; i++) {
+            if(count[i] > 0) {
+                mid = int(count[i]/2) + 1
+                median[i] = values[i][mid]
+            } else {
+                median[i] = 0
+            }
+        }
+
+        # Print detailed report
+        print "PERFORMANCE METRICS:" >> report_file
+        printf "TPS:              mean=%.3f, median=%.3f, min=%.3f, max=%.3f\n", mean[2], median[2], min[2], max[2] >> report_file
+        printf "BPS:              mean=%.3f, median=%.3f, min=%.3f, max=%.3f\n", mean[3], median[3], min[3], max[3] >> report_file
+        print "" >> report_file
+        print "LATENCY METRICS:" >> report_file
+        printf "Block lat (med):  mean=%.3f, median=%.3f, min=%.3f, max=%.3f ms\n", mean[4], median[4], min[4], max[4] >> report_file
+        printf "Block lat (p99):  mean=%.3f, median=%.3f, min=%.3f, max=%.3f ms\n", mean[5], median[5], min[5], max[5] >> report_file
+        print "" >> report_file
+        print "SYSTEM HEALTH:" >> report_file
+        printf "Active validators: mean=%.1f, median=%.1f, min=%.1f, max=%.1f\n", mean[6], median[6], min[6], max[6] >> report_file
+        print "" >> report_file
+        print "LOG ISSUES:" >> report_file
+        printf "WARN count:       mean=%.1f, median=%.1f, min=%.1f, max=%.1f\n", mean[7], median[7], min[7], max[7] >> report_file
+        printf "ERROR count:      mean=%.1f, median=%.1f, min=%.1f, max=%.1f\n", mean[8], median[8], min[8], max[8] >> report_file
+
+        # Output CSV: mean_tps,median_tps,min_tps,max_tps,mean_bps,median_bps,min_bps,max_bps,mean_block_lat_med,median_block_lat_med,min_block_lat_med,max_block_lat_med,mean_active,median_active,min_active,max_active,final_warn,final_error
+        printf "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%.1f,%.1f,%.0f,%.0f\n",
+            mean[2], median[2], min[2], max[2],    # TPS
+            mean[3], median[3], min[3], max[3],    # BPS
+            mean[4], median[4], min[4], max[4],    # Block latency median
+            mean[6], median[6], min[6], max[6],    # Active validators
+            max[7], max[8]                         # Final WARN/ERROR counts
+    }' "$metrics_file" > "$stats_file"
+
+    # Log the statistics with labels
+    if [[ -f "$stats_file" ]]; then
+        stats=$(cat "$stats_file")
+        IFS=',' read -r mean_tps median_tps min_tps max_tps mean_bps median_bps min_bps max_bps mean_block_lat median_block_lat min_block_lat max_block_lat mean_active median_active min_active max_active final_warn final_error <<< "$stats"
+
+        log "=== CALCULATED STATISTICS ==="
+        log "TPS:              mean=$mean_tps, median=$median_tps, range=[$min_tps-$max_tps]"
+        log "BPS:              mean=$mean_bps, median=$median_bps, range=[$min_bps-$max_bps]"
+        log "Block latency:    mean=${mean_block_lat}ms, median=${median_block_lat}ms, range=[${min_block_lat}-${max_block_lat}]ms"
+        log "Active validators: mean=$mean_active, median=$median_active, range=[$min_active-$max_active]"
+        log "Log issues:       WARN=$final_warn, ERROR=$final_error"
+    fi
+}
+
+# === ROBUSTNESS TEST SCENARIOS ===
+
 declare -a SCENARIOS=(
-  # name:validators:block_conn:packet_loss:restart_percent
-  "network_partition:10:45:20:20"     # Near-partition with connectivity maintained
-  "latency_fluctuation:10:25:15:10"    # Moderate disruptions with transaction load
-  "byzantine_behavior:10:30:20:25"    # Recovery from multiple simultaneous restarts
-  "slow_recovery:10:40:10:15"         # Network recovery under load
+    "network_partition:10:45:20:20"
+    "latency_fluctuation:10:25:15:10"
+    "byzantine_behavior:10:30:20:25"
+    "slow_recovery:10:40:10:15"
 )
 
-# Create CSV header for results
-echo "scenario,validators,block_pct,loss_pct,restart_pct,avg_tps,validator_availability,warn_count,error_count,test_duration_min" > "$RESULTS_DIR/test_results.csv"
+# === MAIN TEST EXECUTION ===
 
-# Run each scenario in sequence
+log "==== IOTA Network Live Robustness Test (Fixed) ===="
+log "Starting test run at $(date)"
+log "Test duration per scenario: $TEST_DURATION seconds"
+log "Burn-in: $BURN_IN_SECONDS seconds, Cool-down: $COOL_DOWN_SECONDS seconds"
+log "Monitoring duration per scenario: $((TEST_DURATION - BURN_IN_SECONDS - COOL_DOWN_SECONDS)) seconds"
+
+# Create CSV header for final results (removed transaction latency columns)
+echo "scenario,validators,block_pct,loss_pct,restart_pct,mean_tps,median_tps,min_tps,max_tps,mean_bps,median_bps,min_bps,max_bps,mean_block_lat,median_block_lat,min_block_lat,max_block_lat,mean_active,median_active,min_active,max_active,final_warn,final_error" > "$RESULTS_DIR/live_robustness_results.csv"
+
+scenario_count=0
+total_scenarios=${#SCENARIOS[@]}
+
 for scenario in "${SCENARIOS[@]}"; do
-  IFS=':' read -r name n x l r <<< "$scenario"
+    scenario_count=$((scenario_count + 1))
+    IFS=':' read -r name n x l r <<< "$scenario"
 
-  log "============================================="
-  log "Starting scenario: $name"
-  log "Validators: $n, Block connections: $x%, Packet loss: $l%, Restart: $r%"
+    log "============================================="
+    log "Starting scenario $scenario_count/$total_scenarios: $name"
 
+    # Ensure 70% availability constraint
+    min_online=$(awk "BEGIN {printf \"%.0f\", ($n * 0.7 + 0.5)}")
+    max_restart=$(awk "BEGIN {printf \"%.0f\", (($n - $min_online) * 100 / $n)}")
 
-  # Ensure at least 70% of validators will remain online
-  min_online=$(echo "scale=0; ($n * 0.7 + 0.5)/1" | bc)
-  max_restart=$(echo "scale=0; (($n - $min_online) * 100 / $n)/1" | bc)
+    if [ "$r" -gt "$max_restart" ]; then
+        log "Adjusting restart from $r% to $max_restart% for 70% availability"
+        r=$max_restart
+    fi
 
-  if [ "$r" -gt "$max_restart" ]; then
-    log "WARNING: Adjusting restart percentage from $r% to $max_restart% to ensure 70% uptime"
-    r=$max_restart
-  fi
+    # Create scenario directory
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    scenario_dir="$RESULTS_DIR/${name}_${timestamp}"
+    mkdir -p "$scenario_dir"
 
-  log "Running with parameters: -n $n -p starfish -g true -x $x -l $l -r $r -t $d -S true -C stress -T 500"
+    log "Running experiment with live monitoring..."
 
-  # Create scenario-specific directory for this run
-  timestamp=$(date +%Y%m%d-%H%M%S)
-  scenario_dir="$RESULTS_DIR/${name}_${timestamp}"
-  mkdir -p "$scenario_dir"
+    # Start run-all.sh in background
+    ./run-all.sh \
+        -n "$n" \
+        -p "starfish" \
+        -g true \
+        -x "$x" \
+        -l "$l" \
+        -r "$r" \
+        -t "$TEST_DURATION" \
+        -S true \
+        -C stress \
+        -T 200 \
+        -s "$SEED" \
+        -m > "$scenario_dir/run_all_output.log" 2>&1 &
 
-  # Record start time and baseline metrics
-  start_time=$(date +%s)
-  log "Test start time: $(date -d @$start_time)"
+    run_all_pid=$!
+    log "run-all.sh started with PID $run_all_pid"
 
-  # Run the actual test using run-all.sh
-  log "Executing run-all.sh..."
-  ./run-all.sh \
-    -n "$n" \
-    -p "starfish" \
-    -g true \
-    -x "$x" \
-    -l "$l" \
-    -r "$r" \
-    -t "$d" \
-    -S true \
-    -C stress \
-    -T 200 \
-    -m > "$scenario_dir/run_all_output.log" 2>&1
+    # Monitor experiment and collect live metrics
+    monitor_experiment "$name" "$scenario_dir" "$run_all_pid"
 
-  # Wait a moment for final metrics to stabilize
-  sleep 30
+    # Calculate statistics from collected samples
+    log "Calculating statistics..."
+    calculate_statistics "$scenario_dir/live_metrics.csv" "$scenario_dir/statistics.csv" "$scenario_dir"
 
-  # Collect final metrics
-  log "Collecting final metrics for scenario: $name"
+    # Read and add calculated statistics to final results
+    if [[ -f "$scenario_dir/statistics.csv" ]]; then
+        stats=$(cat "$scenario_dir/statistics.csv")
+        echo "$name,$n,$x,$l,$r,$stats" >> "$RESULTS_DIR/live_robustness_results.csv"
+    else
+        log "ERROR: Statistics calculation failed"
+        echo "$name,$n,$x,$l,$r,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0" >> "$RESULTS_DIR/live_robustness_results.csv"
+    fi
 
-  # Calculate average TPS over the test duration
-  avg_tps=$(calculate_tps 30)
-  log "Average TPS over last 30 minutes: $avg_tps"
+    # Copy logs
+    if [ -d "logs" ]; then
+        cp -r logs/* "$scenario_dir/" 2>/dev/null || true
+    fi
 
-  # Get validator availability
-  validator_availability=$(get_validator_availability "$n")
-  log "Validator availability: $validator_availability%"
+    log "Scenario $name completed. Detailed report at $scenario_dir/statistics_report.txt"
 
-  # Count WARN and ERROR messages from logs
-  log_issues=$(count_log_issues)
-  warn_count=$(echo "$log_issues" | cut -d':' -f1)
-  error_count=$(echo "$log_issues" | cut -d':' -f2)
-  log "Log issues detected - WARN: $warn_count, ERROR: $error_count"
-
-  # Save individual metrics
-  echo "$avg_tps" > "$scenario_dir/avg_tps.txt"
-  echo "$validator_availability" > "$scenario_dir/validator_availability.txt"
-  echo "$warn_count" > "$scenario_dir/warn_count.txt"
-  echo "$error_count" > "$scenario_dir/error_count.txt"
-
-  # Copy all logs for this scenario
-  cp -r "$SCRIPT_DIR/logs"/* "$scenario_dir/" 2>/dev/null || true
-
-  # Add results to CSV
-  echo "$name,$n,$x,$l,$r,$avg_tps,$validator_availability,$warn_count,$error_count,30" >> "$RESULTS_DIR/test_results.csv"
-
-  log "Scenario $name completed. Results saved to $scenario_dir"
-  log "TPS: $avg_tps, Availability: $validator_availability%, WARN: $warn_count, ERROR: $error_count"
-
-  log "Waiting 60 seconds before next scenario..."
-  sleep 60
+    # Wait between scenarios
+    if [ "$scenario_count" -lt "$total_scenarios" ]; then
+        log "Waiting 60 seconds before next scenario..."
+        sleep 60
+    fi
 done
 
-log "All robustness test scenarios completed successfully"
-log "Results available in $RESULTS_DIR"
+log "============================================="
+log "All scenarios completed!"
+log "Results saved to $RESULTS_DIR/live_robustness_results.csv"
 
-# Generate comprehensive summary report
-{
-  echo "# IOTA Network Robustness Test Results"
-  echo "Test completed on $(date)"
-  echo ""
-  echo "## Test Scenarios Summary"
-  echo ""
-  echo "| Scenario | Validators | Block % | Loss % | Restart % | Avg TPS | Availability % | WARN | ERROR |"
-  echo "|----------|------------|---------|--------|-----------|---------|----------------|------|-------|"
+# Show detailed summary with proper labels
+echo ""
+log "=== DETAILED RESULTS SUMMARY ==="
+echo ""
+echo "Legend:"
+echo "  TPS = Transactions Per Second"
+echo "  BPS = Blocks Per Second (consensus messages)"
+echo "  Block_lat = Block commit latency (ms)"
+echo "  Active = Active validators count"
+echo "  WARN/ERROR = Log message counts"
+echo ""
 
-  # Read CSV and format results
-  tail -n +2 "$RESULTS_DIR/test_results.csv" | while IFS=',' read -r scenario validators block_pct loss_pct restart_pct avg_tps availability warn_count error_count duration; do
-    echo "| $scenario | $validators | $block_pct% | $loss_pct% | $restart_pct% | $avg_tps | $availability% | $warn_count | $error_count |"
-  done
+printf "%-18s | %-25s | %-25s | %-20s | %-12s\n" \
+    "Scenario" "TPS (mean/median/range)" "BPS (mean/median/range)" "Block Lat (mean/range)" "WARN/ERROR"
+echo "-------------------|---------------------------|---------------------------|----------------------|------------"
 
-  echo ""
-  echo "## Key Findings"
-  echo ""
+tail -n +2 "$RESULTS_DIR/live_robustness_results.csv" | while IFS=',' read -r scenario validators block_pct loss_pct restart_pct mean_tps median_tps min_tps max_tps mean_bps median_bps min_bps max_bps mean_block_lat median_block_lat min_block_lat max_block_lat mean_active median_active min_active max_active final_warn final_error; do
+    printf "%-18s | %.1f/%.1f/[%.1f-%.1f]     | %.2f/%.2f/[%.2f-%.2f]     | %.1f/[%.1f-%.1f]ms   | %s/%s\n" \
+        "$scenario" "$mean_tps" "$median_tps" "$min_tps" "$max_tps" \
+        "$mean_bps" "$median_bps" "$min_bps" "$max_bps" \
+        "$mean_block_lat" "$min_block_lat" "$max_block_lat" \
+        "$final_warn" "$final_error"
+done
 
-  # Find worst performing scenario
-  worst_tps=$(tail -n +2 "$RESULTS_DIR/test_results.csv" | cut -d',' -f6 | sort -n | head -1)
-  worst_scenario=$(tail -n +2 "$RESULTS_DIR/test_results.csv" | awk -F',' -v min="$worst_tps" '$6==min {print $1}')
-
-  echo "- **Worst TPS Performance:** $worst_scenario with $worst_tps TPS"
-
-  # Find scenario with most errors
-  max_errors=$(tail -n +2 "$RESULTS_DIR/test_results.csv" | cut -d',' -f9 | sort -nr | head -1)
-  if [[ "$max_errors" != "0" ]]; then
-    error_scenario=$(tail -n +2 "$RESULTS_DIR/test_results.csv" | awk -F',' -v max="$max_errors" '$9==max {print $1}')
-    echo "- **Most Errors:** $error_scenario with $max_errors errors"
-  else
-    echo "- **Error-Free:** No ERROR messages detected in any scenario"
-  fi
-
-  # Check availability constraint
-  min_availability=$(tail -n +2 "$RESULTS_DIR/test_results.csv" | cut -d',' -f7 | sort -n | head -1)
-  if (( $(echo "$min_availability < 70" | bc -l) )); then
-    availability_scenario=$(tail -n +2 "$RESULTS_DIR/test_results.csv" | awk -F',' -v min="$min_availability" '$7==min {print $1}')
-    echo "- **⚠️  Availability Violation:** $availability_scenario had only $min_availability% availability"
-  else
-    echo "- **✅ Availability Constraint:** All scenarios maintained >70% validator availability"
-  fi
-
-} > "$RESULTS_DIR/summary.md"
-
-log "Summary report generated at $RESULTS_DIR/summary.md"
-log "To run the test: chmod +x robust_network_test.sh && ./robust_network_test.sh"
+echo ""
+log "Individual scenario reports available in $RESULTS_DIR/*/statistics_report.txt"
+log "Test complete!"
