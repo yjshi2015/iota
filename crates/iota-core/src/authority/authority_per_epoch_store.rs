@@ -2662,6 +2662,18 @@ impl AuthorityPerEpochStore {
                 }
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::MisbehaviourReport(authority),
+                ..
+            }) => {
+                if &transaction.sender_authority() != authority {
+                    warn!(
+                        "MisbehaviourReport authority {} does not match its author from consensus {}",
+                        authority, transaction.certificate_author_index
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind:
                     ConsensusTransactionKind::CapabilityNotificationV1(AuthorityCapabilitiesV1 {
                         authority,
@@ -2781,9 +2793,12 @@ impl AuthorityPerEpochStore {
         let mut current_commit_sequenced_randomness_transactions =
             Vec::with_capacity(verified_transactions.len());
         let mut end_of_publish_transactions = Vec::with_capacity(verified_transactions.len());
+        let mut misbehaviour_report_transactions = Vec::with_capacity(verified_transactions.len());
         for tx in verified_transactions {
             if tx.0.is_end_of_publish() {
                 end_of_publish_transactions.push(tx);
+            } else if tx.0.is_misbehaviour_report() {
+                misbehaviour_report_transactions.push(tx);
             } else if tx.0.is_system() {
                 system_transactions.push(tx);
             } else if tx.0.is_user_tx_with_randomness() {
@@ -2792,6 +2807,8 @@ impl AuthorityPerEpochStore {
                 current_commit_sequenced_consensus_transactions.push(tx);
             }
         }
+
+        // TO DO: use the misbehaviour_report_transactions above
 
         let mut output = ConsensusCommitOutput::new();
 
@@ -3862,6 +3879,15 @@ impl AuthorityPerEpochStore {
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::EndOfPublish(_),
+                ..
+            }) => {
+                // these are partitioned earlier
+                panic!("process_consensus_transaction called with end-of-publish transaction");
+            }
+
+            // TO DO: handle misbehaviour reports properly
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::MisbehaviourReport(_),
                 ..
             }) => {
                 // these are partitioned earlier

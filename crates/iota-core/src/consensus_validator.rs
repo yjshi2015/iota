@@ -81,9 +81,11 @@ impl IotaTxValidator {
                     authority_cap_batch.push(signed_cap);
                 }
 
+                // TO DO: decide where to process this
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)
-                | ConsensusTransactionKind::CapabilityNotificationV1(_) => {}
+                | ConsensusTransactionKind::CapabilityNotificationV1(_)
+                | ConsensusTransactionKind::MisbehaviourReport(_) => {}
             }
         }
 

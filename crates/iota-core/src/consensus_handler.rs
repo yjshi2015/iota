@@ -586,6 +586,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         }
         ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
+        ConsensusTransactionKind::MisbehaviourReport(_) => "misbehaviour_report",
         ConsensusTransactionKind::CapabilityNotificationV1(_) => "capability_notification_v1",
         ConsensusTransactionKind::SignedCapabilityNotificationV1(_) => {
             "signed_capability_notification_v1"
@@ -729,6 +730,17 @@ impl SequencedConsensusTransaction {
     pub fn is_end_of_publish(&self) -> bool {
         if let SequencedConsensusTransactionKind::External(ref transaction) = self.transaction {
             matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..))
+        } else {
+            false
+        }
+    }
+
+    pub fn is_misbehaviour_report(&self) -> bool {
+        if let SequencedConsensusTransactionKind::External(ref transaction) = self.transaction {
+            matches!(
+                transaction.kind,
+                ConsensusTransactionKind::MisbehaviourReport(..)
+            )
         } else {
             false
         }

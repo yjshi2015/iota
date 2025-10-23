@@ -84,6 +84,7 @@ pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
+    MisbehaviourReport(AuthorityName),
     CapabilityNotification(AuthorityName, u64 /* generation */),
     // Key must include both id and jwk, because honest validators could be given multiple jwks
     // for the same id by malfunctioning providers.
@@ -102,6 +103,7 @@ impl Debug for ConsensusTransactionKey {
                 write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
             }
             Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
+            Self::MisbehaviourReport(name) => write!(f, "MisbehaviourReport({:?})", name.concise()),
             Self::CapabilityNotification(name, generation) => write!(
                 f,
                 "CapabilityNotification({:?}, {:?})",
@@ -246,7 +248,7 @@ pub enum ConsensusTransactionKind {
     CertifiedTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
-
+    MisbehaviourReport(AuthorityName),
     CapabilityNotificationV1(AuthorityCapabilitiesV1),
     SignedCapabilityNotificationV1(SignedAuthorityCapabilitiesV1),
 
@@ -483,6 +485,9 @@ impl ConsensusTransaction {
             }
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 ConsensusTransactionKey::EndOfPublish(*authority)
+            }
+            ConsensusTransactionKind::MisbehaviourReport(authority) => {
+                ConsensusTransactionKey::MisbehaviourReport(*authority)
             }
             ConsensusTransactionKind::CapabilityNotificationV1(cap) => {
                 ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
