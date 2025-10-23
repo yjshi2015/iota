@@ -2793,12 +2793,9 @@ impl AuthorityPerEpochStore {
         let mut current_commit_sequenced_randomness_transactions =
             Vec::with_capacity(verified_transactions.len());
         let mut end_of_publish_transactions = Vec::with_capacity(verified_transactions.len());
-        let mut misbehaviour_report_transactions = Vec::with_capacity(verified_transactions.len());
         for tx in verified_transactions {
             if tx.0.is_end_of_publish() {
                 end_of_publish_transactions.push(tx);
-            } else if tx.0.is_misbehaviour_report() {
-                misbehaviour_report_transactions.push(tx);
             } else if tx.0.is_system() {
                 system_transactions.push(tx);
             } else if tx.0.is_user_tx_with_randomness() {
@@ -2807,8 +2804,6 @@ impl AuthorityPerEpochStore {
                 current_commit_sequenced_consensus_transactions.push(tx);
             }
         }
-
-        // TO DO: use the misbehaviour_report_transactions above
 
         let mut output = ConsensusCommitOutput::new();
 
