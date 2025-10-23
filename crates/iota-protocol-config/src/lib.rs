@@ -1148,9 +1148,9 @@ pub struct ProtocolConfig {
     /// Applicable only to `starfish` consensus.
     consensus_max_acknowledgments_per_block: Option<u32>,
 
-    /// Scorer version. When set to `None`, scores are not included in
-    /// EndOfEpoch messages. When set to `Some(version)`, scores are included in
-    /// the EndOfEpochV2 messages, where `version` determines the scoring
+    /// Scorer version. When set to `None`, MisbehaviourReports are not sent and
+    /// considered valid. When set to `Some(version)`, scores are included in
+    /// the MisbehaviourReports messages, where `version` determines the scoring
     /// formulas to be used and whether rewards are adjusted based on the scores
     /// or not.
     scorer_version: Option<u16>,

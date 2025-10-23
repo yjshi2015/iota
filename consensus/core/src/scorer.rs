@@ -27,8 +27,8 @@ enum ScorerVersion {
 /// The Scorer holds the scoring metrics for all authorities in the committee,
 /// which is updated according to the blocks received
 /// and the evictions that happen in storage. It also holds the partial scores
-/// for each authority, which are then added to EndOfPublishV2 and used to
-/// calculate a final score.
+/// for each authority, which are then added to MisbehaviourReport messages and
+/// used to calculate a final score.
 pub struct Scorer {
     scoring_metrics: ValidatorScoringMetrics,
     partial_scores: PartialScores,
@@ -38,8 +38,8 @@ pub struct Scorer {
 
 impl Scorer {
     pub fn new(committee_size: usize, protocol_config: &ProtocolConfig) -> Self {
-        // If protocol_config.scorer_version is None, we use ScorerVersion::V1 but still
-        // send EndOfPublish messages (as opposed to EndOfPublishV2).
+        // If protocol_config.scorer_version is None, we use ScorerVersion::V1 but do
+        // not send MisbehaviourReport messages.
         let version = match protocol_config.scorer_version_as_option() {
             None | Some(1) => ScorerVersion::V1,
             _ => panic!("Unsupported scorer version"),
