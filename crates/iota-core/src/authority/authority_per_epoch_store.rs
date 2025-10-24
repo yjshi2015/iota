@@ -2662,7 +2662,7 @@ impl AuthorityPerEpochStore {
                 }
             }
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::MisbehaviourReport(authority),
+                kind: ConsensusTransactionKind::MisbehaviourReport(authority, _, _),
                 ..
             }) => {
                 if &transaction.sender_authority() != authority {
@@ -3882,7 +3882,7 @@ impl AuthorityPerEpochStore {
 
             // TO DO: handle misbehaviour reports properly
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::MisbehaviourReport(_),
+                kind: ConsensusTransactionKind::MisbehaviourReport(_, _, _),
                 ..
             }) => {
                 // these are partitioned earlier

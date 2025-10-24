@@ -20,7 +20,8 @@ use shared_crypto::intent::IntentScope;
 
 use crate::{
     base_types::{
-        AuthorityName, ConciseableName, ObjectID, ObjectRef, SequenceNumber, TransactionDigest,
+        AuthorityName, CommitRound, ConciseableName, ObjectID, ObjectRef, SequenceNumber,
+        TransactionDigest,
     },
     crypto::{AuthoritySignature, DefaultHash},
     digests::{ConsensusCommitDigest, Digest},
@@ -84,7 +85,7 @@ pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
-    MisbehaviourReport(AuthorityName),
+    MisbehaviourReport(AuthorityName, CommitRound),
     CapabilityNotification(AuthorityName, u64 /* generation */),
     // Key must include both id and jwk, because honest validators could be given multiple jwks
     // for the same id by malfunctioning providers.
@@ -103,7 +104,9 @@ impl Debug for ConsensusTransactionKey {
                 write!(f, "CheckpointSignature({:?}, {:?})", name.concise(), seq)
             }
             Self::EndOfPublish(name) => write!(f, "EndOfPublish({:?})", name.concise()),
-            Self::MisbehaviourReport(name) => write!(f, "MisbehaviourReport({:?})", name.concise()),
+            Self::MisbehaviourReport(name, round) => {
+                write!(f, "MisbehaviourReport({:?},{:?})", name.concise(), round)
+            }
             Self::CapabilityNotification(name, generation) => write!(
                 f,
                 "CapabilityNotification({:?}, {:?})",
@@ -248,7 +251,6 @@ pub enum ConsensusTransactionKind {
     CertifiedTransaction(Box<CertifiedTransaction>),
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
-    MisbehaviourReport(AuthorityName),
     CapabilityNotificationV1(AuthorityCapabilitiesV1),
     SignedCapabilityNotificationV1(SignedAuthorityCapabilitiesV1),
 
@@ -262,6 +264,7 @@ pub enum ConsensusTransactionKind {
     // of `RandomnessDkgMessages` have been received locally, to complete the key generation
     // process. Contents are a serialized `fastcrypto_tbls::dkg::Confirmation`.
     RandomnessDkgConfirmation(AuthorityName, Vec<u8>),
+    MisbehaviourReport(AuthorityName, VersionedReport, CommitRound),
     // New entries should be added at the end to preserve serialization compatibility. DO NOT
     // CHANGE THE ORDER OF EXISTING ENTRIES!
 }
@@ -274,6 +277,19 @@ impl ConsensusTransactionKind {
                 | ConsensusTransactionKind::RandomnessDkgConfirmation(_, _)
         )
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VersionedReport {
+    V1(ReportV1),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReportV1 {
+    pub faulty_blocks_provable: Option<Vec<u64>>,
+    pub faulty_blocks_unprovable: Option<Vec<u64>>,
+    pub equivocations: Option<Vec<u64>>,
+    pub missing_proposals: Option<Vec<u64>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -486,8 +502,8 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::EndOfPublish(authority) => {
                 ConsensusTransactionKey::EndOfPublish(*authority)
             }
-            ConsensusTransactionKind::MisbehaviourReport(authority) => {
-                ConsensusTransactionKey::MisbehaviourReport(*authority)
+            ConsensusTransactionKind::MisbehaviourReport(authority, _, round) => {
+                ConsensusTransactionKey::MisbehaviourReport(*authority, *round)
             }
             ConsensusTransactionKind::CapabilityNotificationV1(cap) => {
                 ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
