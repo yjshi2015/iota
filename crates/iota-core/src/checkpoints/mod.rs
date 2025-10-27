@@ -1889,9 +1889,10 @@ impl CheckpointBuilder {
             .multi_get_transaction_blocks(root_digests);
         let ccps = root_txs
             .iter()
-            .filter_map(|tx|
-                tx.as_ref().filter(|tx| tx.transaction_data().is_consensus_commit_prologue())
-            )
+            .filter_map(|tx| {
+                tx.as_ref()
+                    .filter(|tx| tx.transaction_data().is_consensus_commit_prologue())
+            })
             .collect::<Vec<_>>();
 
         // There should be at most one consensus commit prologue transaction in the

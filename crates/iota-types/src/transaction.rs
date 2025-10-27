@@ -43,13 +43,16 @@ use crate::{
         IotaSignatureInner, RandomnessRound, Signature, Signer, ToFromBytes, default_hash,
     },
     digests::{
-        AdditionalConsensusStateDigest, CertificateDigest, ConsensusCommitDigest, SenderSignedDataDigest, ZKLoginInputsDigest,
+        AdditionalConsensusStateDigest, CertificateDigest, ConsensusCommitDigest,
+        SenderSignedDataDigest, ZKLoginInputsDigest,
     },
     event::Event,
     execution::SharedInput,
     message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope},
     messages_checkpoint::CheckpointTimestamp,
-    messages_consensus::{ConsensusCommitPrologueV1, ConsensusCommitPrologueV4, ConsensusDeterminedVersionAssignments},
+    messages_consensus::{
+        ConsensusCommitPrologueV1, ConsensusCommitPrologueV4, ConsensusDeterminedVersionAssignments,
+    },
     object::{MoveObject, Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     signature::{GenericSignature, VerifyParams},
@@ -1329,8 +1332,7 @@ impl TransactionKind {
     /// transaction.
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match &self {
-            Self::ConsensusCommitPrologueV1(_)
-            | Self::ConsensusCommitPrologueV4(_) => {
+            Self::ConsensusCommitPrologueV1(_) | Self::ConsensusCommitPrologueV4(_) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: IOTA_CLOCK_OBJECT_ID,
                     initial_shared_version: IOTA_CLOCK_OBJECT_SHARED_VERSION,
@@ -1390,8 +1392,7 @@ impl TransactionKind {
             Self::Genesis(_) => {
                 vec![]
             }
-            Self::ConsensusCommitPrologueV1(_)
-            | Self::ConsensusCommitPrologueV4(_) => {
+            Self::ConsensusCommitPrologueV1(_) | Self::ConsensusCommitPrologueV4(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: IOTA_CLOCK_OBJECT_ID,
                     initial_shared_version: IOTA_CLOCK_OBJECT_SHARED_VERSION,

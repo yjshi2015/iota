@@ -2297,11 +2297,14 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         // Switch consensus protocol to Starfish in devnet
                         cfg.feature_flags.consensus_choice = ConsensusChoice::Starfish;
+                    }
 
                     // TODO: when do we want to enable these features?
-                    //if chain != Chain::Mainnet && chain != Chain::Testnet {
-                    //    cfg.feature_flags.record_additional_state_digest_in_prologue = true;
-                    //    cfg.consensus_commit_rate_estimation_window_size = Some(10);
+                    // if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    //    cfg.feature_flags.
+                    // record_additional_state_digest_in_prologue = true;
+                    //    cfg.consensus_commit_rate_estimation_window_size =
+                    // Some(10);
                     //}
                 }
                 // Use this template when making changes:
