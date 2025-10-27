@@ -52,18 +52,18 @@ use crate::{
 
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
 
-const MAX_FILTER_SIZE: u32 = 10000;
+const MAX_FILTER_SIZE: u32 = 100000;
 
 struct FilterForHeaders {
     header_digests: DashSet<BlockHeaderDigest>,
-    queue: Mutex<VecDeque<BlockHeaderDigest>>,
+    queue: RwLock<VecDeque<BlockHeaderDigest>>,
 }
 
 impl FilterForHeaders {
     fn new() -> Self {
         Self {
             header_digests: DashSet::new(),
-            queue: Mutex::new(VecDeque::new()),
+            queue: RwLock::new(VecDeque::new()),
         }
     }
 
@@ -72,14 +72,14 @@ impl FilterForHeaders {
         self.header_digests.len()
     }
 
-    async fn add_batch(&self, digests: Vec<BlockHeaderDigest>) -> Vec<BlockHeaderDigest> {
+    fn add_batch(&self, digests: Vec<BlockHeaderDigest>) -> Vec<BlockHeaderDigest> {
         let mut already_inserted = vec![];
         for digest in digests.iter() {
             if !self.header_digests.insert(*digest) {
                 already_inserted.push(*digest);
             }
         }
-        let mut queue = self.queue.lock().await;
+        let mut queue = self.queue.write();
         for digest in digests {
             queue.push_back(digest);
         }
@@ -168,7 +168,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         encoder: &mut Box<dyn ShardEncoder + Send + Sync>,
     ) -> ConsensusResult<()> {
         fail_point_async!("consensus-rpc-response");
-
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["AuthorityService::handle_subscribed_block_bundle"])
+            .start_timer();
         let peer_hostname = &self.context.committee.authority(peer).hostname;
         let mut serialized_block_bundle_parts =
             SerializedBlockBundleParts::try_from(serialized_block_bundle)?;
@@ -197,7 +203,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 ])
                 .inc();
             let e = ConsensusError::UnexpectedAuthority(signed_block_header.author(), peer);
-            info!("Block with wrong authority from {}: {}", peer, e);
+            warn!("Block with wrong authority from {}: {}", peer, e);
             return Err(e);
         }
 
@@ -212,7 +218,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                     e.clone().name(),
                 ])
                 .inc();
-            info!("Invalid block header from {}: {}", peer, e);
+            warn!("Invalid block header from {}: {}", peer, e);
             return Err(e);
         }
         let (transaction_commitment, our_shard, proof_for_shard) = TransactionsCommitment::compute_merkle_root_shard_and_proof(
@@ -320,7 +326,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                         e.clone().name(),
                     ])
                     .inc();
-                info!("Invalid additional block header from {}: {}", peer, e);
+                warn!("Invalid additional block header from {}: {}", peer, e);
                 return Err(e);
             }
 
@@ -370,7 +376,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                         e.clone().name(),
                     ])
                     .inc();
-                info!("Invalid shard from {}: {}", peer, e);
+                warn!("Invalid shard from {}: {}", peer, e);
                 return Err(e);
             }
 
@@ -396,7 +402,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                         e.clone().name(),
                     ])
                     .inc();
-                info!("Invalid shard from {}: {}", peer, e);
+                warn!("Invalid shard from {}: {}", peer, e);
                 return Err(e);
             }
         }
@@ -464,8 +470,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         digests_to_add_to_filter.push(verified_block.digest());
         let digests_to_exclude = self
             .received_block_headers
-            .add_batch(digests_to_add_to_filter)
-            .await;
+            .add_batch(digests_to_add_to_filter);
         // Exclude digests that are already in the filter from the additional headers
         // We rely on the fact that digests_to_exclude is a subsequence of
         // additional_block_headers
