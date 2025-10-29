@@ -55,7 +55,7 @@ use crate::{
 mod tests;
 
 const TASK_QUEUE_SIZE: usize = 5000;
-const EFFECTS_QUEUE_SIZE: usize = 10000;
+const EFFECTS_QUEUE_SIZE: usize = 20000;
 const TX_MAX_RETRY_TIMES: u32 = 10;
 
 #[derive(Clone)]
