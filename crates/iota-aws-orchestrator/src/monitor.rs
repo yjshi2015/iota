@@ -250,6 +250,10 @@ impl Grafana {
                 "sudo cp iota/crates/iota-aws-orchestrator/assets/consensus-overview.json {}",
                 Self::DASHBOARDS_PATH
             ),
+            &format!(
+                "sudo cp iota/crates/iota-aws-orchestrator/assets/starfish-overview.json {}",
+                Self::DASHBOARDS_PATH
+            ),
             "sudo service grafana-server restart",
         ]
         .join(" && ")
