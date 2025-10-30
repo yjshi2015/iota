@@ -5,11 +5,7 @@
 use std::{fs, net::SocketAddr, path::PathBuf};
 
 use crate::{
-    benchmark::{BenchmarkParameters, BenchmarkType},
-    client::Instance,
-    error::{MonitorError, MonitorResult},
-    protocol::ProtocolMetrics,
-    ssh::{CommandContext, SshConnectionManager},
+    benchmark::{BenchmarkParameters, BenchmarkType}, client::Instance, display, error::{MonitorError, MonitorResult}, protocol::ProtocolMetrics, ssh::{CommandContext, SshConnectionManager}
 };
 
 pub struct Monitor {
@@ -67,6 +63,7 @@ impl Monitor {
         // Configure and reload grafana.
         let instance = std::iter::once(self.instance.clone());
         let commands = Grafana::setup_commands();
+        display::action(commands.clone());
         self.ssh_manager
             .execute(instance, commands, CommandContext::default())
             .await?;
@@ -239,19 +236,19 @@ impl Grafana {
                 Self::DASHBOARDS_PATH
             ),
             &format!(
-                "sudo cp iota/crates/iota-aws-orchestrator/assets/grafana-dashboard.json {}",
+                "sudo cp -f iota/crates/iota-aws-orchestrator/assets/grafana-dashboard.json {}",
                 Self::DASHBOARDS_PATH
             ),
             &format!(
-                "sudo cp iota/crates/iota-aws-orchestrator/assets/cluster-status-dashboard.json {}",
+                "sudo cp -f iota/crates/iota-aws-orchestrator/assets/cluster-status-dashboard.json {}",
                 Self::DASHBOARDS_PATH
             ),
             &format!(
-                "sudo cp iota/crates/iota-aws-orchestrator/assets/consensus-overview.json {}",
+                "sudo cp -f iota/crates/iota-aws-orchestrator/assets/consensus-overview.json {}",
                 Self::DASHBOARDS_PATH
             ),
             &format!(
-                "sudo cp iota/crates/iota-aws-orchestrator/assets/starfish-overview.json {}",
+                "sudo cp -f iota/crates/iota-aws-orchestrator/assets/starfish-overview.json {}",
                 Self::DASHBOARDS_PATH
             ),
             "sudo service grafana-server restart",
