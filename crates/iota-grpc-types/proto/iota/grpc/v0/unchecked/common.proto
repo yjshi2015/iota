@@ -1,0 +1,126 @@
+// Copyright (c) 2025 IOTA Stiftung
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package iota.grpc.v0.common;
+
+// ============================================================================
+// Object-related types
+// ============================================================================
+
+// Reference to an object.
+message ObjectReference {
+  // The object id of this object.
+  Address object_id = 1;
+  // The version of this object.
+  optional uint64 version = 2;
+  // The digest of this object.
+  optional Digest digest = 3;
+}
+
+// Owner types
+message Owner {
+  oneof owner {
+    Address address_owner = 1;
+    Address object_owner = 2;
+    SharedOwner shared = 3;
+    ImmutableOwner immutable = 4;
+  }
+}
+
+message SharedOwner {
+  uint64 initial_shared_version = 1;
+}
+
+message ImmutableOwner {}
+
+// ============================================================================
+// Transaction-related types
+// ============================================================================
+
+// Gas data for transactions
+message GasData {
+  // Payment objects
+  repeated ObjectReference payment = 1;
+  // Gas owner
+  Address owner = 2;
+  // Gas price
+  uint64 price = 3;
+  // Gas budget
+  uint64 budget = 4;
+}
+
+// Finality information
+message EffectsFinality {
+  oneof finality {
+    // BCS-encoded iota_types::crypto::AuthorityStrongQuorumSignInfo
+    BcsData certified_signature = 1;
+    uint64 checkpointed = 2;
+  }
+}
+
+// ============================================================================
+// Object and balance change types
+// ============================================================================
+
+// ObjectChange represents changes to objects during transaction execution
+message ObjectChange {
+  oneof change {
+    ObjectPublished published = 1;
+    ObjectTransferred transferred = 2;
+    ObjectMutated mutated = 3;
+    ObjectDeleted deleted = 4;
+    ObjectWrapped wrapped = 5;
+    ObjectCreated created = 6;
+  }
+}
+
+message ObjectPublished {
+  Address package_id = 1;
+  uint64 version = 2;
+  Digest digest = 3;
+  repeated string modules = 4;
+}
+
+message ObjectTransferred {
+  Address sender = 1;
+  Owner recipient = 2;
+  string object_type = 3;  // StructTag as string
+  Address object_id = 4;
+  uint64 version = 5;
+  Digest digest = 6;
+}
+
+message ObjectMutated {
+  Address sender = 1;
+  Owner owner = 2;
+  string object_type = 3;  // StructTag as string
+  Address object_id = 4;
+  uint64 version = 5;
+  uint64 previous_version = 6;
+  Digest digest = 7;
+}
+
+message ObjectDeleted {
+  Address sender = 1;
+  string object_type = 2;  // StructTag as string
+  Address object_id = 3;
+  uint64 version = 4;
+}
+
+message ObjectWrapped {
+  Address sender = 1;
+  string object_type = 2;  // StructTag as string
+  Address object_id = 3;
+  uint64 version = 4;
+}
+
+message ObjectCreated {
+  Address sender = 1;
+  Owner owner = 2;
+  string object_type = 3;  // StructTag as string
+  Address object_id = 4;
+  uint64 version = 5;
+  Digest digest = 6;
+}

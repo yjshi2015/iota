@@ -3,14 +3,21 @@
 
 syntax = "proto3";
 
-package iota.grpc.v0.write;
+package iota.grpc.v0.transactions;
 
 import "common.proto";
+import "transaction.proto";
 
-service WriteService {
+// Transaction subscription service
+service TransactionService {
   rpc ExecuteTransaction (ExecuteTransactionRequest) returns (ExecuteTransactionResponse);
   rpc DevInspectTransaction (DevInspectTransactionRequest) returns (DevInspectTransactionResponse);
   rpc DryRunTransaction (DryRunTransactionRequest) returns (DryRunTransactionResponse);
+}
+
+// Request to stream transactions with optional filtering
+message TransactionStreamRequest {
+  TransactionFilter filter = 1;
 }
 
 // ExecuteTransaction
@@ -22,24 +29,33 @@ message ExecuteTransactionRequest {
 // ExecuteTransactionResponse - Matches REST API
 message ExecuteTransactionResponse {
   // BCS-encoded iota_types::effects::TransactionEffects
-  iota.grpc.v0.common.Bcs effects = 1;
+  // MUST, 
+  BcsData effects = 1;
 
   // Finality information
+  // MUST
   iota.grpc.v0.common.EffectsFinality finality = 2;
 
   // BCS-encoded iota_types::events::TransactionEvents
-  iota.grpc.v0.common.Bcs events = 3;
+  // MUST (is it part of the effects?), maybe opt-in
+  BcsData events = 3;
 
   // Balance changes (derived from comparing input/output)
   // To discuss: should we have this for convenience?
+  // This is only for wallet users?!
   repeated iota.grpc.v0.common.BalanceChange balance_changes = 4;
 
   // Full input objects, iota_types::object::Object
-  repeated iota.grpc.v0.common.Bcs input_objects = 5;
+  // optional: maybe via flag, or not at all
+  repeated BcsData input_objects = 5;
 
   // Full output objects, iota_types::object::Object
-  repeated iota.grpc.v0.common.Bcs output_objects = 6;
+  // optional: maybe via flag, or not at all (objectrefs should be part of the effects)
+  repeated BcsData output_objects = 6;
 }
+
+// depending on the outcome of an investigation (dry_run vs dev_inspect in the VM executor, and vs simulate_tx)
+// defines if we need both API endpoints or not (we should look into upstream, what they use for simulate)
 
 // DevInspectTransaction
 message DevInspectTransactionRequest {
@@ -70,20 +86,20 @@ message DevInspectArgs {
 
 message DevInspectTransactionResponse {
   // BCS-encoded iota_types::effects::TransactionEffects
-  iota.grpc.v0.common.Bcs effects = 1;
+  BcsData effects = 1;
 
   // BCS-encoded iota_types::events::TransactionEvents
-  iota.grpc.v0.common.Bcs events = 2;
+  BcsData events = 2;
 
   // BCS-encoded iota_json_rpc_types::src::IotaExecutionResult
   // To discuss: do we need to redefine this type in grpc types? Do we need this?
-  repeated iota.grpc.v0.common.Bcs results = 3;
+  repeated BcsData results = 3;
 
   // Execution error from executing the transaction
   optional string error = 4;
 
   // BCS-encoded iota_types::transaction::TransactionData
-  optional iota.grpc.v0.common.Bcs transaction_data = 5;
+  optional BcsData transaction_data = 5;
 }
 
 // DryRunTransaction
@@ -94,10 +110,10 @@ message DryRunTransactionRequest {
 
 message DryRunTransactionResponse {
   // BCS-encoded iota_types::effects::TransactionEffects
-  iota.grpc.v0.common.Bcs effects = 1;
+  BcsData effects = 1;
 
   // BCS-encoded iota_types::events::TransactionEvents
-  optional iota.grpc.v0.common.Bcs events = 2;
+  optional BcsData events = 2;
 
   // Object changes
   // To discuss: should we have this for convenience?
@@ -109,12 +125,12 @@ message DryRunTransactionResponse {
 
   // BCS-encoded iota_types::transaction::TransactionData
   // To discuss: is this sufficient?
-  iota.grpc.v0.common.Bcs transaction_data = 5;
+  BcsData transaction_data = 5;
 
   // Suggested gas price (optional)
+  // MUST
   optional uint64 suggested_gas_price = 6;
 
   // Execution error source (optional, provides detailed error information)
-  // Presented in https://github.com/MystenLabs/sui/issues/21375
   optional string execution_error_source = 7;
 }
