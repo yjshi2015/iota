@@ -18,6 +18,14 @@ pub fn main() -> Result<()> {
                 .required(false),
         )
         .arg(
+            Arg::new("number-of-addresses")
+                .short('n')
+                .long("number-of-addresses")
+                .help("the number of addresses to generate (default 1)")
+                .value_name("NUMBER")
+                .required(false),
+        )
+        .arg(
             Arg::new("verify")
                 .long("verify")
                 .help("verify address (default false)")
@@ -43,6 +51,11 @@ pub fn main() -> Result<()> {
             .unwrap_or("m/44'/4218'/0'/0'/0'"),
     )?;
 
+    let number_of_addresses = matches
+        .get_one::<String>("number-of-addresses")
+        .map(|s| s.parse::<u32>().unwrap_or(1))
+        .unwrap_or(1);
+
     let verify = matches.get_flag("verify");
 
     let ledger = if is_simulator {
@@ -51,15 +64,34 @@ pub fn main() -> Result<()> {
         iota_ledger::Ledger::new_with_native_hid()?
     };
 
-    // generate address without prompt
-    let pk_result = if verify {
-        ledger.verify_address(&derivation_path)?
-    } else {
-        ledger.get_public_key(&derivation_path)?
-    };
+    let start_account = derivation_path.as_ref()[3].index();
 
-    println!("Public Key: 0x{}", hex::encode(&pk_result.public_key));
-    println!("Address: 0x{}", hex::encode(pk_result.address));
+    for i in 0..number_of_addresses {
+        let mut path = derivation_path
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        path.extend([
+            bip32::ChildNumber::new(start_account + i, true).unwrap(),
+            bip32::ChildNumber::new(0, true).unwrap(),
+            bip32::ChildNumber::new(0, true).unwrap(),
+        ]);
+
+        // generate address without prompt
+        let pk_result = if verify {
+            ledger.verify_address(&path)?
+        } else {
+            ledger.get_public_key(&path)?
+        };
+
+        println!("BIP32 Path: {}", path);
+        println!("Address: 0x{}", hex::encode(pk_result.address));
+        println!("Public Key: 0x{}", hex::encode(&pk_result.public_key));
+        println!();
+    }
 
     Ok(())
 }
