@@ -252,6 +252,13 @@ public fun is_object_data(arg: &CallArg): bool {
     }
 }
 
+public fun is_shared_object(obj_arg: &ObjectArg): bool {
+    match (obj_arg) {
+        ObjectArg::SharedObject { id: _, initial_shared_version: _, mutable: _ } => true,
+        _ => false,
+    }
+}
+
 // === Test-only functions ===
 
 #[test_only]
@@ -332,4 +339,31 @@ public fun new_pure(data: vector<u8>): CallArg {
 #[test_only]
 public fun new_object(obj: ObjectArg): CallArg {
     CallArg::ObjectData(obj)
+}
+
+#[test_only]
+public fun new_object_ref(
+    object_id: ID,
+    sequence_number: u64,
+    object_digest: vector<u8>,
+): ObjectRef {
+    ObjectRef {
+        object_id,
+        sequence_number,
+        object_digest,
+    }
+}
+
+#[test_only]
+public fun new_imm_or_owned_object(obj_ref: ObjectRef): ObjectArg {
+    ObjectArg::ImmOrOwnedObject(obj_ref)
+}
+
+#[test_only]
+public fun new_shared_object(id: ID, initial_shared_version: u64, mutable: bool): ObjectArg {
+    ObjectArg::SharedObject {
+        id,
+        initial_shared_version,
+        mutable,
+    }
 }
