@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["iota_indexer",[["impl AsExpression&lt;BigInt&gt; for <a class=\"enum\" href=\"iota_indexer/models/transactions/enum.IndexStatus.html\" title=\"enum iota_indexer::models::transactions::IndexStatus\">IndexStatus</a>"],["impl AsExpression&lt;Nullable&lt;BigInt&gt;&gt; for <a class=\"enum\" href=\"iota_indexer/models/transactions/enum.IndexStatus.html\" title=\"enum iota_indexer::models::transactions::IndexStatus\">IndexStatus</a>"],["impl&lt;'__expr&gt; AsExpression&lt;BigInt&gt; for &amp;'__expr <a class=\"enum\" href=\"iota_indexer/models/transactions/enum.IndexStatus.html\" title=\"enum iota_indexer::models::transactions::IndexStatus\">IndexStatus</a>"],["impl&lt;'__expr&gt; AsExpression&lt;Nullable&lt;BigInt&gt;&gt; for &amp;'__expr <a class=\"enum\" href=\"iota_indexer/models/transactions/enum.IndexStatus.html\" title=\"enum iota_indexer::models::transactions::IndexStatus\">IndexStatus</a>"],["impl&lt;'__expr, '__expr2&gt; AsExpression&lt;BigInt&gt; for &amp;'__expr2 &amp;'__expr <a class=\"enum\" href=\"iota_indexer/models/transactions/enum.IndexStatus.html\" title=\"enum iota_indexer::models::transactions::IndexStatus\">IndexStatus</a>"],["impl&lt;'__expr, '__expr2&gt; AsExpression&lt;Nullable&lt;BigInt&gt;&gt; for &amp;'__expr2 &amp;'__expr <a class=\"enum\" href=\"iota_indexer/models/transactions/enum.IndexStatus.html\" title=\"enum iota_indexer::models::transactions::IndexStatus\">IndexStatus</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1432]}

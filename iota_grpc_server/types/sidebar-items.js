@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["GrpcCheckpointDataBroadcaster","GrpcCheckpointSummaryBroadcaster","GrpcReader","RestStateReaderAdapter"],"trait":["CheckpointDataBroadcaster","CheckpointSummaryBroadcaster","EventSubscriber","GrpcStateReader"],"type":["CheckpointStreamResult"]};
