@@ -500,7 +500,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     // Record metrics for live synchronizer requests
                     let metrics = &context.metrics.node_metrics;
                     metrics
-                        .synchronizer_requested_blocks_by_peer
+                        .synchronizer_requested_block_headers_by_peer
                         .with_label_values(&[peer_hostname.as_str(), "live"])
                         .inc_by(headers_guard.block_refs.len() as u64);
                     // Count requested blocks per authority and increment metric by one per authority
@@ -511,7 +511,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     for author in authors {
                         let host = &context.committee.authority(author).hostname;
                         metrics
-                            .synchronizer_requested_blocks_by_authority
+                            .synchronizer_requested_block_headers_by_authority
                             .with_label_values(&[host.as_str(), "live"])
                             .inc();
                     }
@@ -611,14 +611,15 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         let metrics = &context.metrics.node_metrics;
         let peer_hostname = &context.committee.authority(peer_index).hostname;
         metrics
-            .synchronizer_fetched_blocks_by_peer
+            .synchronizer_fetched_block_headers_by_peer
             .with_label_values(&[peer_hostname.as_str(), sync_method])
             .inc_by(block_headers.len() as u64);
-        for block in &block_headers {
-            let block_hostname = &context.committee.authority(block.author()).hostname;
+        for block_header in &block_headers {
+            let block_header_hostname =
+                &context.committee.authority(block_header.author()).hostname;
             metrics
-                .synchronizer_fetched_blocks_by_authority
-                .with_label_values(&[block_hostname.as_str(), sync_method])
+                .synchronizer_fetched_block_headers_by_authority
+                .with_label_values(&[block_header_hostname.as_str(), sync_method])
                 .inc();
         }
 
@@ -712,7 +713,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 context
                     .metrics
                     .node_metrics
-                    .invalid_block_headers
+                    .bundles_with_invalid_headers
                     .with_label_values(&[hostname.as_str(), "synchronizer", e.clone().name()])
                     .inc();
                 warn!("Invalid block received from {}: {}", peer_index, e);
@@ -826,7 +827,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                             context
                                                 .metrics
                                                 .node_metrics
-                                                .invalid_block_headers
+                                                .bundles_with_invalid_headers
                                                 .with_label_values(&[hostname.as_str(), "synchronizer_own_block_header", err.clone().name()])
                                                 .inc();
                                             warn!("Invalid block header received from {}: {}", authority_index, err);
@@ -984,7 +985,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 self.context
                     .metrics
                     .node_metrics
-                    .fetch_blocks_scheduler_skipped
+                    .synchronizer_fetch_block_headers_scheduler_skipped
                     .with_label_values(&["commit_lagging"])
                     .inc();
                 return Ok(());
@@ -998,7 +999,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 context
                     .metrics
                     .node_metrics
-                    .fetch_block_headers_scheduler_inflight
+                    .synchronizer_fetch_block_headers_scheduler_inflight
                     .inc();
                 let total_requested = missing_blocks_refs.len();
 
@@ -1016,7 +1017,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 context
                     .metrics
                     .node_metrics
-                    .fetch_block_headers_scheduler_inflight
+                    .synchronizer_fetch_block_headers_scheduler_inflight
                     .dec();
                 if results.is_empty() {
                     warn!("No results returned while requesting missing block headers");
@@ -1232,13 +1233,13 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             context
                 .metrics
                 .node_metrics
-                .synchronizer_missing_blocks_by_authority
+                .synchronizer_missing_block_headers_by_authority
                 .with_label_values(&[&authority.hostname.as_str()])
                 .inc_by(missing as u64);
             context
                 .metrics
                 .node_metrics
-                .synchronizer_current_missing_blocks_by_authority
+                .synchronizer_current_missing_block_headers_by_authority
                 .with_label_values(&[&authority.hostname.as_str()])
                 .set(missing as i64);
         }
@@ -1292,13 +1293,13 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 // Record metrics about requested blocks
                 let metrics = &context.metrics.node_metrics;
                 metrics
-                    .synchronizer_requested_blocks_by_peer
+                    .synchronizer_requested_block_headers_by_peer
                     .with_label_values(&[peer_hostname.as_str(), label])
                     .inc_by(block_refs.len() as u64);
                 for block_ref in &block_refs {
                     let block_hostname = &context.committee.authority(block_ref.author).hostname;
                     metrics
-                        .synchronizer_requested_blocks_by_authority
+                        .synchronizer_requested_block_headers_by_authority
                         .with_label_values(&[block_hostname.as_str(), label])
                         .inc();
                 }
@@ -1352,14 +1353,14 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                     // Record metrics about requested blocks
                                     let metrics = &context.metrics.node_metrics;
                                     metrics
-                                        .synchronizer_requested_blocks_by_peer
+                                        .synchronizer_requested_block_headers_by_peer
                                         .with_label_values(&[peer_hostname.as_str(), "periodic_retry"])
                                         .inc_by(block_refs.len() as u64);
                                     for block_ref in &block_refs {
                                         let block_hostname =
                                             &context.committee.authority(block_ref.author).hostname;
                                         metrics
-                                            .synchronizer_requested_blocks_by_authority
+                                            .synchronizer_requested_block_headers_by_authority
                                             .with_label_values(&[block_hostname.as_str(), "periodic_retry"])
                                             .inc();
                                     }
